@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.2] — Image hosting core
+
+### Added
+- Content sniffing and kind classification: PNG, JPEG, GIF, WebP and AVIF
+  are `image`; valid UTF-8 text (no NUL) is `text`; SVG, HTML, XHTML and
+  JavaScript are always `file`; everything else is `file`. Clients may force
+  `kind=text|file`.
+- Multipart uploads: several `file` parts in one request return an array.
+  Form fields may appear before or after the files.
+- Lossless metadata stripping for JPEG (EXIF incl. GPS, XMP, IPTC, comments,
+  trailing MPF images), PNG (`eXIf`, `tEXt`, `zTXt`, `iTXt`, `tIME`) and WebP
+  (`EXIF`, `XMP `). JPEG orientation is preserved as a minimal EXIF block.
+  Opt out per upload with `keep_meta=1` or globally with
+  `strip_image_meta = false`.
+- Image dimensions (`width`, `height`, display-oriented) and a `markdown`
+  field in item responses.
+- Image view page with the picture and copy buttons for link, direct URL and
+  Markdown (external script, no inline JS).
+- CLI: `--md`, `--raw`, `--keep-meta`, `--no-copy`; results are copied to the
+  clipboard when stdout is a terminal (Wayland, X11, macOS); `tibi clip`
+  uploads the clipboard, preferring an image over text.
+
+### Changed
+- Images always use the extension of their detected type in `raw_url`
+  (a PNG named `shot.jpg` is served at `/{id}.png`).
+
 ## [0.0.1] — Walking skeleton
 
 ### Added

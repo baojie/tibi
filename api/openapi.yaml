@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.1
+  version: 0.0.2
   description: |
     Self-hosted image host + pastebin. Upload anything, get back a URL.
     This file is the source of truth for /api/v1.
@@ -42,15 +42,36 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
   /api/v1/items:
     post:
-      summary: Upload an item (raw body)
+      summary: Upload one or more items
       description: |
-        The request body is the content. Options are given as query
-        parameters or as the equivalent `X-Tibi-*` headers
-        (`X-Tibi-Filename`, `X-Tibi-Title`, `X-Tibi-Source`, `X-Tibi-Meta`).
-        Requires scope `upload`.
+        Two forms:
+
+        **A. multipart/form-data** — one or more `file` parts plus optional
+        form fields (`title`, `kind`, `keep_meta`, `source`, `meta`). Each
+        part's filename is used. Fields may come before or after the files.
+        One file → an Item object; several → an array of Items, in order.
+
+        **B. raw body** — the body is the content. Options are query
+        parameters or the equivalent `X-Tibi-*` headers (`X-Tibi-Filename`,
+        `X-Tibi-Title`, `X-Tibi-Kind`, `X-Tibi-Keep-Meta`, `X-Tibi-Source`,
+        `X-Tibi-Meta`).
+
+        The kind is detected from the content: PNG/JPEG/GIF/WebP/AVIF →
+        `image`; valid UTF-8 text → `text`; everything else, including SVG,
+        HTML, XHTML and JavaScript, → `file`. EXIF (incl. GPS), XMP and text
+        metadata are stripped losslessly from JPEG/PNG/WebP unless
+        `keep_meta=1` (JPEG orientation is kept). Requires scope `upload`.
       parameters:
         - { name: filename, in: query, schema: { type: string } }
         - { name: title, in: query, schema: { type: string } }
+        - name: kind
+          in: query
+          description: force the kind; images and media cannot be forced
+          schema: { type: string, enum: [text, file] }
+        - name: keep_meta
+          in: query
+          description: keep image metadata (EXIF/GPS/XMP)
+          schema: { type: string, enum: ["0", "1", "true", "false"] }
         - { name: source, in: query, schema: { type: string }, description: "client tag, e.g. cli, chrome, adseen" }
         - { name: meta, in: query, schema: { type: string }, description: "JSON object of client metadata" }
       requestBody:
@@ -58,12 +79,28 @@ paths:
         content:
           application/octet-stream:
             schema: { type: string, format: binary }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: array
+                  items: { type: string, format: binary }
+                title: { type: string }
+                kind: { type: string, enum: [text, file] }
+                keep_meta: { type: string }
+                source: { type: string }
+                meta: { type: string }
       responses:
         "201":
-          description: Item created
+          description: Item(s) created — an object for one file, an array for several
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Item" }
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/Item" }
+                  - { type: array, items: { $ref: "#/components/schemas/Item" } }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Error" }
@@ -105,7 +142,7 @@ components:
         quota_bytes: { type: [integer, "null"] }
     Item:
       type: object
-      required: [id, kind, url, raw_url, download_url, mime, size, visibility, expires_at, created_at]
+      required: [id, kind, url, raw_url, download_url, markdown, mime, size, visibility, expires_at, created_at]
       properties:
         id: { type: string, pattern: "^[0-9A-Za-z]{8}$" }
         kind: { type: string, enum: [image, video, audio, text, file, encrypted] }
@@ -113,7 +150,10 @@ components:
         raw_url: { type: string, format: uri }
         download_url: { type: string, format: uri }
         mime: { type: string }
-        size: { type: integer }
+        size: { type: integer, description: "stored bytes (after metadata stripping)" }
+        width: { type: integer, description: "images: display width (EXIF rotation applied)" }
+        height: { type: integer, description: "images: display height" }
+        markdown: { type: string, description: "![](raw_url) for images, [name](url) otherwise" }
         filename: { type: string }
         title: { type: string }
         visibility: { type: string, enum: [unlisted, private] }

@@ -27,7 +27,7 @@ import (
 )
 
 // Version is set at build time via -ldflags "-X tibi/internal/app.Version=...".
-var Version = "0.0.1"
+var Version = "0.0.2"
 
 // Instance is an opened data directory.
 type Instance struct {
