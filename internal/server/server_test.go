@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"tibi/internal/config"
+	"tibi/internal/server"
 	"tibi/internal/testutil"
 )
 
@@ -265,5 +266,19 @@ func TestEmptyUpload(t *testing.T) {
 	e := testutil.New(t, nil)
 	if resp, _ := upload(t, e, e.Token("t"), "", nil); resp.StatusCode != 400 {
 		t.Fatalf("empty: %d", resp.StatusCode)
+	}
+}
+
+func TestContentDisposition(t *testing.T) {
+	cases := map[string]string{
+		"x.bin":         `attachment; filename="x.bin"`,
+		"季度 报告(终版).txt": `attachment; filename="ID.txt"; filename*=UTF-8''%E5%AD%A3%E5%BA%A6%20%E6%8A%A5%E5%91%8A%28%E7%BB%88%E7%89%88%29.txt`,
+		`a"b\c;d.txt`:   `attachment; filename="a_b_c_d.txt"; filename*=UTF-8''a%22b%5Cc%3Bd.txt`,
+		"题壁":            `attachment; filename="ID.txt"; filename*=UTF-8''%E9%A2%98%E5%A3%81`,
+	}
+	for in, want := range cases {
+		if got := server.ContentDisposition(in, "ID.txt"); got != want {
+			t.Errorf("%q:\n got %s\nwant %s", in, got, want)
+		}
 	}
 }

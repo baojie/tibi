@@ -2,8 +2,9 @@ package server
 
 import (
 	"bytes"
-	"mime"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -150,12 +151,55 @@ func (s *Server) serveBlob(w http.ResponseWriter, r *http.Request, it *store.Ite
 	h.Set("Cache-Control", "public, max-age=31536000, immutable")
 	if download {
 		h.Set("Content-Type", "application/octet-stream")
-		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": downloadName(it)}))
+		h.Set("Content-Disposition", ContentDisposition(downloadName(it), it.ID+"."+it.Ext))
 	} else {
 		h.Set("Content-Type", RawContentType(it.Mime))
 		h.Set("Content-Disposition", "inline")
 	}
 	http.ServeContent(w, r, "", time.Unix(it.CreatedAt, 0), f)
+}
+
+// ContentDisposition builds an attachment header carrying both an ASCII
+// filename (for tools such as curl -J and wget that ignore RFC 5987) and the
+// exact UTF-8 name in filename* (used by browsers).
+func ContentDisposition(name, fallback string) string {
+	ascii := asciiName(name)
+	if ascii != name && alnum(strings.TrimSuffix(ascii, path.Ext(ascii))) < 2 {
+		ascii = fallback // e.g. an all-Chinese name: "_ _(_).txt" helps nobody
+	}
+	v := `attachment; filename="` + ascii + `"`
+	if ascii != name {
+		v += "; filename*=UTF-8''" + url.PathEscape(name)
+	}
+	return v
+}
+
+// asciiName replaces characters that are not safe in a quoted ASCII
+// filename, collapsing runs into one underscore and keeping the extension.
+func asciiName(name string) string {
+	var b strings.Builder
+	under := false
+	for _, r := range name {
+		ok := r > 0x20 && r < 0x7f && r != '"' && r != '\\' && r != '/' && r != ';' && r != '%'
+		if ok || r == ' ' {
+			b.WriteRune(r)
+			under = false
+		} else if !under {
+			b.WriteByte('_')
+			under = true
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func alnum(s string) int {
+	n := 0
+	for _, r := range s {
+		if r < 0x80 && (r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z') {
+			n++
+		}
+	}
+	return n
 }
 
 func downloadName(it *store.Item) string {
