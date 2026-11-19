@@ -127,6 +127,32 @@ pass now; `tibi admin gc --orphans` also scans the store for blobs with no
 database row (left by a crash between storing a blob and recording it) and
 deletes those older than an hour.
 
+## HEIC photos (iPhone, many Android phones)
+
+Browsers cannot show HEIC, and there is no mature pure-Go decoder, so tibi
+converts HEIC/HEIF uploads to JPEG with an external tool:
+
+```toml
+convert_heic = true
+heic_converter = "auto"   # auto | vips | heif-convert | magick | off | /path/to/command
+```
+
+`auto` uses the first of `vips`, `heif-convert`, `magick` found in `PATH`
+(the server logs which one at startup). A custom command is run as
+`command INPUT.heic OUTPUT.jpg`. Each conversion has a 60 s timeout.
+
+The tools need libheif **with an HEVC decoder plugin**. On Debian/Ubuntu:
+
+```sh
+apt install libheif-examples libheif-plugin-libde265   # heif-convert
+# or: apt install libvips-tools                         # vips
+```
+
+ImageMagick may list HEIC as readable while lacking the HEVC plugin; such
+uploads then fail to convert and are stored as-is (a warning is logged).
+Without a working converter, HEIC photos are kept unchanged and their page
+offers a download.
+
 ## Development: testing against S3
 
 `scripts/test-s3.sh` starts a throwaway S3-compatible server

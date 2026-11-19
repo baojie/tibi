@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.6] — Media: video, audio, HEIC, thumbnails
+
+### Added
+- `video` (MP4, WebM, MOV) and `audio` (MP3, Ogg, Opus, M4A, WAV, FLAC) kinds
+  with inline players; seeking uses `Range`. `duration_ms` for MP4/MOV/M4A
+  and WAV (read from the container header, also when `moov` is at the end).
+- HEIC/HEIF photos are converted to JPEG with an external tool —
+  `heic_converter = "auto"` tries `vips`, `heif-convert`, `magick` — or a
+  custom command path. The original type is kept as `orig_mime`; the
+  converted JPEG has its metadata (and orientation, already applied to the
+  pixels) removed. Without a converter, or when conversion fails, the photo
+  is stored as-is and offered for download with a note.
+- WebP thumbnails (400px wide, EXIF orientation applied) for PNG, JPEG, GIF
+  and WebP images, generated on upload, shared between identical images,
+  served at `/{id}/thumb` (`thumbnail_url`) and garbage-collected with their
+  image. Encoding is pure Go (libwebp via purego when present, WASM
+  otherwise).
+
+### Changed
+- Matroska (`.mkv`) files are labelled `video/x-matroska` instead of
+  `video/webm` and stored as files.
+
 ## [0.0.5] — Object storage: S3 / Backblaze B2
 
 ### Added

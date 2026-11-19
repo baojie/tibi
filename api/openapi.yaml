@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.5
+  version: 0.0.6
   description: |
     Self-hosted image host + pastebin. Upload anything, get back a URL.
     This file is the source of truth for /api/v1.
@@ -59,7 +59,10 @@ paths:
         `X-Tibi-Meta`).
 
         The kind is detected from the content: PNG/JPEG/GIF/WebP/AVIF →
-        `image`; valid UTF-8 text → `text`; text in a recognizable legacy
+        `image` (HEIC/HEIF photos are converted to JPEG when the server has
+        a converter, with `orig_mime` recording the original; otherwise they
+        are stored as `file`); MP4/WebM/MOV → `video`; MP3/Ogg/Opus/M4A/WAV/
+        FLAC → `audio`; valid UTF-8 text → `text`; text in a recognizable legacy
         charset (GBK/GB18030, Big5, Shift_JIS, EUC-JP, EUC-KR, Latin-1,
         UTF-16 with BOM) is transcoded to UTF-8 (the original bytes are not
         kept) and becomes `text` with `charset` set; everything else, including SVG,
@@ -258,6 +261,9 @@ components:
         width: { type: integer, description: "images: display width (EXIF rotation applied)" }
         height: { type: integer, description: "images: display height" }
         markdown: { type: string, description: "![](raw_url) for images, [name](url) otherwise" }
+        duration_ms: { type: integer, description: "video/audio length, when cheaply known (MP4/MOV/M4A, WAV)" }
+        orig_mime: { type: string, description: "original type when the upload was converted, e.g. image/heic" }
+        thumbnail_url: { type: string, format: uri, description: "images: WebP thumbnail, 400px wide" }
         filename: { type: string }
         title: { type: string }
         lang: { type: string, description: "text: canonical language, e.g. go, python, markdown, text" }
