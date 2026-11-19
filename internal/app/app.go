@@ -22,13 +22,14 @@ import (
 	"tibi/internal/blob"
 	"tibi/internal/config"
 	"tibi/internal/gc"
+	"tibi/internal/migrate"
 	"tibi/internal/server"
 	"tibi/internal/store"
 	"tibi/internal/units"
 )
 
 // Version is set at build time via -ldflags "-X tibi/internal/app.Version=...".
-var Version = "0.0.4"
+var Version = "0.0.5"
 
 // Instance is an opened data directory.
 type Instance struct {
@@ -51,12 +52,27 @@ func Open(cfg config.Server) (*Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	bs, err := blob.NewFS(filepath.Join(cfg.DataDir, "blobs"))
+	bs, err := OpenBlobs(cfg, cfg.Storage.Backend)
 	if err != nil {
 		st.Close()
 		return nil, err
 	}
 	return &Instance{Cfg: cfg, Store: st, Blobs: bs, Tmp: tmp}, nil
+}
+
+// OpenBlobs opens the named blob backend ("fs" or "s3") from cfg.
+func OpenBlobs(cfg config.Server, backend string) (blob.Store, error) {
+	switch backend {
+	case "fs":
+		return blob.NewFS(filepath.Join(cfg.DataDir, "blobs"))
+	case "s3":
+		s := cfg.Storage.S3
+		return blob.NewS3(blob.S3Config{
+			Endpoint: s.Endpoint, Region: s.Region, Bucket: s.Bucket, Prefix: s.Prefix,
+			AccessKey: s.AccessKey, SecretKey: s.SecretKey, UsePathStyle: s.UsePathStyle,
+		})
+	}
+	return nil, fmt.Errorf("unknown storage backend %q", backend)
 }
 
 // Close releases resources.
@@ -92,6 +108,14 @@ func Serve(args []string, stderr io.Writer) error {
 		return err
 	}
 	defer in.Close()
+	if cfg.Storage.Backend == "s3" {
+		pctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := blob.Probe(pctx, in.Blobs)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("%w (storage.s3: endpoint %s, bucket %s)", err, cfg.Storage.S3.Endpoint, cfg.Storage.S3.Bucket)
+		}
+	}
 	h, err := server.New(cfg, in.Store, in.Blobs, in.Tmp, log)
 	if err != nil {
 		return err
@@ -107,7 +131,8 @@ func Serve(args []string, stderr io.Writer) error {
 	go gc.Loop(ctx, in.Store, in.Blobs, gc.Interval, log)
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	log.Info("listening", "addr", cfg.Listen, "base_url", cfg.BaseURL, "data_dir", cfg.DataDir)
+	log.Info("listening", "addr", cfg.Listen, "base_url", cfg.BaseURL, "data_dir", cfg.DataDir,
+		"storage", cfg.Storage.Backend, "blob_delivery", cfg.BlobDelivery)
 	select {
 	case err := <-errc:
 		return err
@@ -126,13 +151,20 @@ const adminUsage = `usage:
   tibi admin token create --name N --scopes upload,delete,read_private [--quota 10GiB]
   tibi admin token list
   tibi admin token revoke N
-  tibi admin gc                 remove expired/deleted items and unused blobs now
+  tibi admin gc [--orphans]     remove expired/deleted items and unused blobs now;
+                                --orphans also scans storage for unreferenced blobs
+  tibi admin blobs migrate --to s3|fs [--workers 8]
+                                copy all blobs to the other backend (verified,
+                                resumable); then switch storage.backend
 `
 
 // Admin implements `tibi admin`.
 func Admin(args []string, stdout, stderr io.Writer) error {
 	if len(args) >= 1 && args[0] == "gc" {
 		return adminGC(args[1:], stdout, stderr)
+	}
+	if len(args) >= 2 && args[0] == "blobs" && args[1] == "migrate" {
+		return adminMigrate(args[2:], stdout, stderr)
 	}
 	if len(args) < 2 || args[0] != "token" {
 		fmt.Fprint(stderr, adminUsage)
@@ -225,6 +257,7 @@ func adminGC(args []string, stdout, stderr io.Writer) error {
 	fs := pflag.NewFlagSet("admin gc", pflag.ContinueOnError)
 	fs.SetOutput(stderr)
 	cfgPath := configFlag(fs)
+	orphans := fs.Bool("orphans", false, "also delete stored blobs no item references (older than 1h)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -237,10 +270,77 @@ func adminGC(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	defer in.Close()
-	res, err := gc.Run(context.Background(), in.Store, in.Blobs)
+	ctx := context.Background()
+	res, err := gc.Run(ctx, in.Store, in.Blobs)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "removed %d items, %d blobs\n", res.Items, res.Blobs)
+	if *orphans {
+		n, err := gc.Orphans(ctx, in.Store, in.Blobs, gc.OrphanMinAge)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "removed %d orphaned blobs\n", n)
+	}
+	return nil
+}
+
+func adminMigrate(args []string, stdout, stderr io.Writer) error {
+	fs := pflag.NewFlagSet("admin blobs migrate", pflag.ContinueOnError)
+	fs.SetOutput(stderr)
+	cfgPath := configFlag(fs)
+	to := fs.String("to", "", "destination backend: s3 or fs")
+	workers := fs.Int("workers", 8, "parallel copies")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := loadConfig(*cfgPath)
+	if err != nil {
+		return err
+	}
+	from := cfg.Storage.Backend
+	switch {
+	case *to != "fs" && *to != "s3":
+		return errors.New("--to must be s3 or fs")
+	case *to == from:
+		return fmt.Errorf("storage.backend is already %q; migrate copies from the configured backend to the other one", from)
+	}
+	if *to == "s3" {
+		probe := cfg
+		probe.Storage.Backend = "s3"
+		if err := probe.Validate(); err != nil {
+			return err
+		}
+	}
+	in, err := Open(cfg)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	dst, err := OpenBlobs(cfg, *to)
+	if err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := blob.Probe(ctx, dst); err != nil {
+		return err
+	}
+	fmt.Fprintf(stderr, "copying blobs %s → %s …\n", from, *to)
+	var last time.Time
+	res, err := migrate.Run(ctx, in.Store, in.Blobs, dst, *workers, func(r migrate.Result) {
+		if time.Since(last) > time.Second {
+			last = time.Now()
+			fmt.Fprintf(stderr, "\r%d/%d done", r.Copied+r.Skipped+r.Missing+r.Failed, r.Total)
+		}
+	})
+	fmt.Fprintf(stderr, "\r")
+	fmt.Fprintf(stdout, "blobs: %d total, %d copied, %d already present, %d missing at source, %d failed\n",
+		res.Total, res.Copied, res.Skipped, res.Missing, res.Failed)
+	if err != nil {
+		return fmt.Errorf("migration incomplete (re-run to resume): %w", err)
+	}
+	fmt.Fprintf(stdout, "done. Now set storage.backend = %q in the config and restart the server.\n", *to)
 	return nil
 }
