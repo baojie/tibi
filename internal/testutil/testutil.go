@@ -7,10 +7,13 @@ import (
 	"log/slog"
 	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"tibi/internal/app"
 	"tibi/internal/config"
+	"tibi/internal/gc"
 	"tibi/internal/server"
 	"tibi/internal/store"
 )
@@ -21,6 +24,27 @@ type Env struct {
 	Srv      *httptest.Server
 	Instance *app.Instance
 	Cfg      config.Server
+	offset   atomic.Int64 // clock offset in nanoseconds
+}
+
+// Advance moves the server's clock forward.
+func (e *Env) Advance(d time.Duration) { e.offset.Add(int64(d)) }
+
+// GC runs one garbage-collection pass.
+func (e *Env) GC() gc.Result {
+	e.T.Helper()
+	res, err := gc.Run(context.Background(), e.Instance.Store, e.Instance.Blobs)
+	if err != nil {
+		e.T.Fatal(err)
+	}
+	return res
+}
+
+// BlobCount counts stored blobs.
+func (e *Env) BlobCount() int {
+	n := 0
+	e.Instance.Blobs.List(context.Background(), "", func(string) error { n++; return nil })
+	return n
 }
 
 // New starts a server with a temp data dir. mod may adjust the config.
@@ -40,6 +64,8 @@ func New(t *testing.T, mod func(*config.Server)) *Env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	e := &Env{T: t, Instance: in, Cfg: cfg}
+	in.Store.Now = func() time.Time { return time.Now().Add(time.Duration(e.offset.Load())) }
 	h, err := server.New(cfg, in.Store, in.Blobs, in.Tmp, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +76,8 @@ func New(t *testing.T, mod func(*config.Server)) *Env {
 		srv.Close()
 		in.Close()
 	})
-	return &Env{T: t, Srv: srv, Instance: in, Cfg: cfg}
+	e.Srv = srv
+	return e
 }
 
 // Token creates a token with the given scopes and returns its secret.

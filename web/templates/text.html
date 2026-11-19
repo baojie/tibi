@@ -18,10 +18,13 @@
     {{end}}
     <span class="spacer"></span>
     <button type="button" class="button secondary" id="wrap-toggle" aria-pressed="false">Wrap</button>
+    {{if not .Burned}}
     <button type="button" class="button secondary" data-copy-url="{{.RawURL}}">Copy</button>
     <a class="button secondary" href="{{.RawURL}}" rel="nofollow">Raw</a>
     <a class="button secondary" href="{{.DownloadURL}}">Download</a>
+    {{end}}
   </div>
+  {{template "notices" .}}
   {{if .Text.Truncated}}
   <p class="notice">This text is {{.Size}}; showing the first {{.Text.ShownSize}} ({{.Text.Lines}} lines). <a href="{{.RawURL}}" rel="nofollow">View the full raw text</a>.</p>
   {{end}}

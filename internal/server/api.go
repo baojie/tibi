@@ -13,6 +13,7 @@ import (
 
 	"tibi/internal/ingest"
 	"tibi/internal/store"
+	"tibi/internal/units"
 )
 
 type ctxKey int
@@ -87,18 +88,50 @@ func truthy(v string) bool {
 }
 
 // uploadOptions builds ingest options from a value lookup.
-func (s *Server) uploadOptions(r *http.Request, get func(string) string) ingest.Options {
-	return ingest.Options{
-		Filename: get("filename"),
-		Title:    get("title"),
-		Kind:     get("kind"),
-		Lang:     get("lang"),
-		KeepMeta: truthy(get("keep_meta")),
-		Source:   get("source"),
-		Meta:     get("meta"),
-		TokenID:  tokenFrom(r.Context()).ID,
-		MaxBytes: s.cfg.MaxUploadBytes,
+func (s *Server) uploadOptions(r *http.Request, get func(string) string) (ingest.Options, error) {
+	o := ingest.Options{
+		Filename:   get("filename"),
+		Title:      get("title"),
+		Kind:       get("kind"),
+		Lang:       get("lang"),
+		KeepMeta:   truthy(get("keep_meta")),
+		Source:     get("source"),
+		Meta:       get("meta"),
+		Slug:       strings.ToLower(get("slug")),
+		Burn:       truthy(get("burn_after_read")),
+		Visibility: get("visibility"),
+		TokenID:    tokenFrom(r.Context()).ID,
+		MaxBytes:   s.cfg.MaxUploadBytes,
 	}
+	switch o.Visibility {
+	case "", store.Unlisted, store.Private:
+	default:
+		return o, &ingest.BadRequestError{Msg: "visibility must be unlisted or private"}
+	}
+	if o.Slug != "" && !store.ValidSlug(o.Slug) {
+		return o, &ingest.BadRequestError{Msg: store.ErrSlugInvalid.Error()}
+	}
+	exp := get("expires")
+	if exp == "" {
+		exp = s.cfg.DefaultExpires
+	}
+	at, err := s.expiresAt(exp)
+	if err != nil {
+		return o, &ingest.BadRequestError{Msg: err.Error()}
+	}
+	o.ExpiresAt = at
+	return o, nil
+}
+
+// expiresAt converts an expiry like "7d" into an absolute unix time
+// (nil for never).
+func (s *Server) expiresAt(exp string) (*int64, error) {
+	d, never, err := units.ParseExpiry(exp)
+	if err != nil || never {
+		return nil, err
+	}
+	at := s.store.Now().Add(d).Unix()
+	return &at, nil
 }
 
 func (s *Server) tooLarge(w http.ResponseWriter) {
@@ -117,6 +150,8 @@ func (s *Server) ingestError(w http.ResponseWriter, err error) {
 		apiError(w, http.StatusBadRequest, "empty", "upload is empty")
 	case errors.As(err, &bre):
 		apiError(w, http.StatusBadRequest, "bad_request", bre.Msg)
+	case errors.Is(err, store.ErrSlugInvalid):
+		apiError(w, http.StatusBadRequest, "bad_request", err.Error())
 	default:
 		s.log.Error("ingest", "err", err)
 		apiError(w, http.StatusInternalServerError, "internal", "upload failed")
@@ -135,7 +170,12 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit+1)
-	it, err := s.ingest.Ingest(r.Context(), r.Body, s.uploadOptions(r, func(k string) string { return opt(r, k) }))
+	o, err := s.uploadOptions(r, func(k string) string { return opt(r, k) })
+	if err != nil {
+		s.ingestError(w, err)
+		return
+	}
+	it, err := s.ingest.Ingest(r.Context(), r.Body, o)
 	if err != nil {
 		s.ingestError(w, err)
 		return
@@ -230,8 +270,17 @@ func (s *Server) handleMultipart(w http.ResponseWriter, r *http.Request, boundar
 			p.Close()
 		}
 	}()
+	base, err := s.uploadOptions(r, get)
+	if err != nil {
+		s.ingestError(w, err)
+		return
+	}
+	if base.Slug != "" && len(files) > 1 {
+		apiError(w, http.StatusBadRequest, "bad_request", "slug can only be set when uploading a single file")
+		return
+	}
 	for _, sf := range files {
-		o := s.uploadOptions(r, get)
+		o := base
 		if sf.name != "" {
 			o.Filename = sf.name
 		}
@@ -263,43 +312,55 @@ func (s *Server) handleMultipart(w http.ResponseWriter, r *http.Request, boundar
 
 // ItemJSON is the API representation of an item.
 type ItemJSON struct {
-	ID          string `json:"id"`
-	Kind        string `json:"kind"`
-	URL         string `json:"url"`
-	RawURL      string `json:"raw_url"`
-	DownloadURL string `json:"download_url"`
-	Mime        string `json:"mime"`
-	Size        int64  `json:"size"`
-	Width       *int   `json:"width,omitempty"`
-	Height      *int   `json:"height,omitempty"`
-	Markdown    string `json:"markdown"`
-	Filename    string `json:"filename,omitempty"`
-	Title       string `json:"title,omitempty"`
-	Lang        string `json:"lang,omitempty"`
-	Charset     string `json:"charset,omitempty"`
-	Visibility  string `json:"visibility"`
-	ExpiresAt   *int64 `json:"expires_at"`
-	CreatedAt   int64  `json:"created_at"`
+	ID            string `json:"id"`
+	Kind          string `json:"kind"`
+	URL           string `json:"url"`
+	RawURL        string `json:"raw_url"`
+	DownloadURL   string `json:"download_url"`
+	Mime          string `json:"mime"`
+	Size          int64  `json:"size"`
+	Width         *int   `json:"width,omitempty"`
+	Height        *int   `json:"height,omitempty"`
+	Markdown      string `json:"markdown"`
+	Filename      string `json:"filename,omitempty"`
+	Title         string `json:"title,omitempty"`
+	Lang          string `json:"lang,omitempty"`
+	Charset       string `json:"charset,omitempty"`
+	Visibility    string `json:"visibility"`
+	Slug          string `json:"slug,omitempty"`
+	SlugURL       string `json:"slug_url,omitempty"`
+	BurnAfterRead bool   `json:"burn_after_read"`
+	Source        string `json:"source,omitempty"`
+	ViewCount     int64  `json:"view_count"`
+	ExpiresAt     *int64 `json:"expires_at"`
+	CreatedAt     int64  `json:"created_at"`
 }
 
 func (s *Server) itemJSON(it *store.Item) ItemJSON {
 	j := ItemJSON{
-		ID:          it.ID,
-		Kind:        it.Kind,
-		URL:         s.cfg.BaseURL + "/" + it.ID,
-		RawURL:      s.cfg.RawBase() + "/" + it.ID + "." + it.Ext,
-		DownloadURL: s.cfg.RawBase() + "/" + it.ID + "/dl",
-		Mime:        it.Mime,
-		Size:        it.Size,
-		Filename:    it.Filename,
-		Title:       it.Title,
-		Lang:        it.Lang,
-		Charset:     it.Charset,
-		Visibility:  it.Visibility,
-		ExpiresAt:   it.ExpiresAt,
-		CreatedAt:   it.CreatedAt,
-		Width:       it.Width,
-		Height:      it.Height,
+		ID:            it.ID,
+		Kind:          it.Kind,
+		URL:           s.cfg.BaseURL + "/" + it.ID,
+		RawURL:        s.cfg.RawBase() + "/" + it.ID + "." + it.Ext,
+		DownloadURL:   s.cfg.RawBase() + "/" + it.ID + "/dl",
+		Mime:          it.Mime,
+		Size:          it.Size,
+		Filename:      it.Filename,
+		Title:         it.Title,
+		Lang:          it.Lang,
+		Charset:       it.Charset,
+		Visibility:    it.Visibility,
+		ExpiresAt:     it.ExpiresAt,
+		CreatedAt:     it.CreatedAt,
+		Width:         it.Width,
+		Height:        it.Height,
+		Slug:          it.Slug,
+		BurnAfterRead: it.BurnAfterRead,
+		Source:        it.Source,
+		ViewCount:     it.ViewCount,
+	}
+	if it.Slug != "" {
+		j.SlugURL = s.cfg.BaseURL + "/s/" + it.Slug
 	}
 	j.Markdown = markdownFor(it, j.URL, j.RawURL)
 	return j

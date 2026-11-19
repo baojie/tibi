@@ -41,7 +41,7 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		log = slog.Default()
 	}
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"file", "image", "text"} {
+	for _, name := range []string{"file", "image", "text", "burn"} {
 		t, err := template.ParseFS(web.Templates, "templates/layout.html", "templates/"+name+".html")
 		if err != nil {
 			return nil, err
@@ -75,11 +75,16 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/v1/openapi.yaml", s.handleOpenAPI)
 	m.Handle("GET /api/v1/whoami", s.auth("", http.HandlerFunc(s.handleWhoami)))
 	m.Handle("POST /api/v1/items", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleUpload)))
+	m.Handle("GET /api/v1/items", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleList)))
+	m.Handle("GET /api/v1/items/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleGetItem)))
+	m.Handle("PATCH /api/v1/items/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handlePatchItem)))
+	m.Handle("DELETE /api/v1/items/{id}", s.auth(store.ScopeDelete, http.HandlerFunc(s.handleDeleteItem)))
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
 
 	m.HandleFunc("GET /{$}", s.handleIndex)
+	m.HandleFunc("GET /s/{slug}", s.handleSlug)
 	// Item routes (/{id}, /{id}.{ext}, /{id}/raw, /{id}/dl) are dispatched by
 	// hand: wildcard patterns would conflict with the /static/ and /api/ prefixes.
 	m.HandleFunc("/", s.handleItemRoutes)

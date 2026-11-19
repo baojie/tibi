@@ -6,6 +6,7 @@
     <dt>Size</dt><dd>{{.Size}}</dd>
     <dt>Type</dt><dd>{{.Item.Mime}}</dd>
   </dl>
+  {{template "notices" .}}
   <p class="actions">
     <a class="button" href="{{.DownloadURL}}">Download</a>
     <a class="button secondary" href="{{.RawURL}}" rel="nofollow">Raw</a>

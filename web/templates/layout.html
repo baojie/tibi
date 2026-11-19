@@ -13,3 +13,10 @@
 <main>{{template "content" .}}</main>
 </body>
 </html>{{end}}
+
+{{define "notices"}}
+{{if .Burned}}<p class="notice">This item has been deleted from the server. It cannot be opened again — save or copy it now if you need it.</p>
+{{else if .Item.BurnAfterRead}}<p class="notice">Burn after reading: this item will be deleted when someone without a token opens it.</p>{{end}}
+{{with .Expires}}<p class="notice muted">Expires {{.}}.</p>{{end}}
+{{if eq .Item.Visibility "private"}}<p class="notice muted">Private: visible only with a token that can read private items.</p>{{end}}
+{{end}}

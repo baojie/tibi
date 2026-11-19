@@ -1,0 +1,10 @@
+{{define "content"}}
+<section class="item item-burn">
+  <h1>Burn after reading</h1>
+  <p>This {{if eq .Kind "image"}}image{{else if eq .Kind "text"}}message{{else}}file{{end}} can be viewed <strong>only once</strong>.
+     It will be deleted from the server as soon as you open it.</p>
+  <form method="post" action="{{.Action}}">
+    <button type="submit" class="button">{{if or (eq .Kind "image") (eq .Kind "text")}}Reveal{{else}}Download{{end}}</button>
+  </form>
+</section>
+{{end}}

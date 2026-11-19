@@ -2,9 +2,13 @@ package server
 
 import (
 	"bytes"
+	"encoding/base64"
+	"html/template"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,12 +24,21 @@ const (
 
 // handleItemRoutes dispatches the frozen item URL scheme (PLAN A3).
 func (s *Server) handleItemRoutes(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+	if len(parts) == 2 && parts[1] == "reveal" {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", "POST")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleReveal(w, r, parts[0])
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	switch {
 	case len(parts) == 1:
 		s.handleItemOrRaw(w, r, parts[0])
@@ -41,11 +54,7 @@ func (s *Server) handleItemRoutes(w http.ResponseWriter, r *http.Request) {
 // handleItemOrRaw serves /{id} (view page) and /{id}.{ext} (raw bytes).
 func (s *Server) handleItemOrRaw(w http.ResponseWriter, r *http.Request, name string) {
 	itemID, ext, hasExt := strings.Cut(name, ".")
-	if !id.Valid(itemID) {
-		notFound(w)
-		return
-	}
-	it, err := s.lookup(r, itemID)
+	it, acc, err := s.lookup(r, itemID)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -55,43 +64,126 @@ func (s *Server) handleItemOrRaw(w http.ResponseWriter, r *http.Request, name st
 			notFound(w)
 			return
 		}
-		s.serveBlob(w, r, it, false)
+		s.serveRaw(w, r, it, acc, false)
 		return
 	}
-	s.renderView(w, r, it)
+	if it.BurnAfterRead && !acc.privileged {
+		s.renderBurnNotice(w, it)
+		return
+	}
+	s.renderView(w, r, it, viewOpts{})
 }
 
 func (s *Server) handleRaw(w http.ResponseWriter, r *http.Request, itemID string) {
-	it, err := s.lookup(r, itemID)
+	it, acc, err := s.lookup(r, itemID)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	s.serveBlob(w, r, it, false)
+	s.serveRaw(w, r, it, acc, false)
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, itemID string) {
-	it, err := s.lookup(r, itemID)
+	it, acc, err := s.lookup(r, itemID)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	s.serveBlob(w, r, it, true)
+	s.serveRaw(w, r, it, acc, true)
 }
 
-func (s *Server) lookup(r *http.Request, itemID string) (*store.Item, error) {
+// serveRaw serves bytes, except that burn-after-read items are never served
+// raw to unprivileged clients: chat-app link previewers prefetch raw URLs,
+// and only the explicit reveal may consume the item.
+func (s *Server) serveRaw(w http.ResponseWriter, r *http.Request, it *store.Item, acc access, download bool) {
+	if it.BurnAfterRead && !acc.privileged {
+		notFound(w)
+		return
+	}
+	s.serveBlob(w, r, it, download)
+}
+
+// access describes what the requester may see.
+type access struct {
+	// privileged requests carry a token with read_private: they see private
+	// items, and burn-after-read items without consuming them.
+	privileged bool
+}
+
+func (s *Server) requestAccess(r *http.Request) access {
+	secret := bearer(r)
+	if secret == "" {
+		return access{}
+	}
+	t, err := s.store.Authenticate(r.Context(), secret)
+	if err != nil {
+		return access{}
+	}
+	return access{privileged: t.Has(store.ScopeReadPrivate)}
+}
+
+// lookup returns a live item the requester may access; anything else is
+// ErrNotFound, so private, expired and deleted items are indistinguishable
+// from ones that never existed.
+func (s *Server) lookup(r *http.Request, itemID string) (*store.Item, access, error) {
 	if !id.Valid(itemID) {
-		return nil, store.ErrNotFound
+		return nil, access{}, store.ErrNotFound
 	}
 	it, err := s.store.GetItem(r.Context(), itemID)
 	if err != nil {
-		return nil, err
+		return nil, access{}, err
 	}
-	if it.Visibility == "private" {
-		// Private access (read_private tokens, signed links) arrives in 0.0.4/0.0.9.
-		return nil, store.ErrNotFound
+	var acc access
+	if it.Visibility == store.Private || it.BurnAfterRead {
+		acc = s.requestAccess(r)
 	}
-	return it, nil
+	if it.Visibility == store.Private && !acc.privileged {
+		return nil, acc, store.ErrNotFound
+	}
+	return it, acc, nil
+}
+
+// handleSlug redirects /s/{slug} to the item it points to.
+func (s *Server) handleSlug(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if !store.ValidSlug(slug) {
+		notFound(w)
+		return
+	}
+	it, err := s.store.ResolveSlug(r.Context(), slug)
+	if err == nil && it.Visibility == store.Private && !s.requestAccess(r).privileged {
+		err = store.ErrNotFound
+	}
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	http.Redirect(w, r, "/"+it.ID, http.StatusFound)
+}
+
+// handleReveal shows a burn-after-read item once and deletes it.
+func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request, itemID string) {
+	it, _, err := s.lookup(r, itemID)
+	if err == nil && !it.BurnAfterRead {
+		err = store.ErrNotFound
+	}
+	if err == nil {
+		// Claim it first: of concurrent reveals exactly one succeeds. The
+		// blob stays until GC, so it can still be read below.
+		err = s.store.Burn(r.Context(), itemID)
+	}
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	switch it.Kind {
+	case store.KindText, store.KindImage:
+		s.renderView(w, r, it, viewOpts{burned: true})
+	default:
+		s.serveBlob(w, r, it, true)
+	}
 }
 
 func (s *Server) fail(w http.ResponseWriter, err error) {
@@ -148,7 +240,7 @@ func (s *Server) serveBlob(w http.ResponseWriter, r *http.Request, it *store.Ite
 	h := w.Header()
 	h.Set("Content-Security-Policy", rawCSP)
 	h.Set("Cross-Origin-Resource-Policy", "cross-origin")
-	h.Set("Cache-Control", "public, max-age=31536000, immutable")
+	h.Set("Cache-Control", s.rawCacheControl(it))
 	if download {
 		h.Set("Content-Type", "application/octet-stream")
 		h.Set("Content-Disposition", ContentDisposition(downloadName(it), it.ID+"."+it.Ext))
@@ -202,6 +294,22 @@ func alnum(s string) int {
 	return n
 }
 
+// rawCacheControl lets public, permanent content be cached forever, while
+// private, burn-after-read and expiring content is not cached past its life.
+func (s *Server) rawCacheControl(it *store.Item) string {
+	if it.Visibility == store.Private || it.BurnAfterRead {
+		return "private, no-store"
+	}
+	if it.ExpiresAt != nil {
+		left := *it.ExpiresAt - s.store.Now().Unix()
+		if left < 0 {
+			left = 0
+		}
+		return "public, max-age=" + strconv.FormatInt(min(left, 31536000), 10)
+	}
+	return "public, max-age=31536000, immutable"
+}
+
 func downloadName(it *store.Item) string {
 	if it.Filename != "" {
 		return it.Filename
@@ -215,13 +323,21 @@ type viewModel struct {
 	Size        string
 	URL         string
 	RawURL      string
-	EmbedURL    string
+	EmbedURL    template.URL
 	DownloadURL string
 	Markdown    string
 	Text        *textView
+	Expires     string
+	// Burned is set when a burn-after-read item is shown on reveal: it is
+	// already deleted, so no raw/download links are offered.
+	Burned bool
 }
 
-func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.Item) {
+type viewOpts struct {
+	burned bool
+}
+
+func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.Item, o viewOpts) {
 	title := it.Title
 	if title == "" {
 		title = downloadName(it)
@@ -233,16 +349,28 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 		Size:        units.FormatBytes(it.Size),
 		URL:         j.URL,
 		RawURL:      s.cfg.RawBase() + "/" + it.ID + "/raw",
-		EmbedURL:    j.RawURL,
+		EmbedURL:    template.URL(j.RawURL),
 		DownloadURL: j.DownloadURL,
 		Markdown:    j.Markdown,
+		Burned:      o.burned,
+	}
+	if it.ExpiresAt != nil {
+		vm.Expires = time.Unix(*it.ExpiresAt, 0).UTC().Format("2006-01-02 15:04 UTC")
 	}
 	page := "file"
 	switch it.Kind {
 	case store.KindImage:
 		page = "image"
+		if o.burned {
+			uri, err := s.dataURI(r, it)
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			vm.EmbedURL = uri
+		}
 	case store.KindText:
-		tv, err := s.loadTextView(r.Context(), it)
+		tv, err := s.loadTextView(r.Context(), it, !o.burned)
 		if err != nil {
 			s.fail(w, err)
 			return
@@ -250,6 +378,10 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 		vm.Text = tv
 		page = "text"
 	}
+	s.writePage(w, page, vm, it.Visibility == store.Private || it.BurnAfterRead)
+}
+
+func (s *Server) writePage(w http.ResponseWriter, page string, vm any, noStore bool) {
 	var buf bytes.Buffer
 	if err := s.pages[page].ExecuteTemplate(&buf, "layout", vm); err != nil {
 		s.log.Error("render", "err", err)
@@ -260,8 +392,36 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Content-Security-Policy", s.viewCSP())
 	h.Set("X-Frame-Options", "DENY")
-	h.Set("Cache-Control", "no-cache")
+	if noStore {
+		h.Set("Cache-Control", "no-store")
+	} else {
+		h.Set("Cache-Control", "no-cache")
+	}
 	w.Write(buf.Bytes())
+}
+
+// dataURI inlines an image so it can be shown after its item is burned.
+func (s *Server) dataURI(r *http.Request, it *store.Item) (template.URL, error) {
+	f, err := s.blobs.Open(r.Context(), blob.Key(it.SHA256))
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return "", err
+	}
+	return template.URL("data:" + it.Mime + ";base64," + base64.StdEncoding.EncodeToString(b)), nil
+}
+
+// renderBurnNotice is the interstitial for burn-after-read items: link
+// previewers that GET the page see only this; the reveal is a POST.
+func (s *Server) renderBurnNotice(w http.ResponseWriter, it *store.Item) {
+	s.writePage(w, "burn", struct {
+		Title  string
+		Action string
+		Kind   string
+	}{"Burn after reading", "/" + it.ID + "/reveal", it.Kind}, true)
 }
 
 // viewCSP allows images and media from the raw origin when it differs.

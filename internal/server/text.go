@@ -25,10 +25,12 @@ type textView struct {
 	ShownSize  string
 }
 
-func (s *Server) loadTextView(ctx context.Context, it *store.Item) (*textView, error) {
+// loadTextView renders a text item. Burned items are not cached, so their
+// content does not linger in memory.
+func (s *Server) loadTextView(ctx context.Context, it *store.Item, cache bool) (*textView, error) {
 	limit := s.cfg.MaxTextBytes
 	key := it.SHA256 + "|" + it.Lang + "|" + strconv.FormatInt(limit, 10)
-	if v, ok := s.renderCache.Get(key); ok {
+	if v, ok := s.renderCache.Get(key); ok && cache {
 		return v.(*textView), nil
 	}
 	f, err := s.blobs.Open(ctx, blob.Key(it.SHA256))
@@ -55,7 +57,9 @@ func (s *Server) loadTextView(ctx context.Context, it *store.Item) (*textView, e
 			tv.Rendered, tv.IsMarkdown = html, true
 		}
 	}
-	s.renderCache.Put(key, tv, len(tv.Code)+len(tv.Rendered))
+	if cache {
+		s.renderCache.Put(key, tv, len(tv.Code)+len(tv.Rendered))
+	}
 	return tv, nil
 }
 
