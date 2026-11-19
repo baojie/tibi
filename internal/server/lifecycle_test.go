@@ -479,3 +479,18 @@ func TestPatchFields(t *testing.T) {
 		t.Fatalf("patch missing: %d", code)
 	}
 }
+
+func TestShortExpiryNeverEarly(t *testing.T) {
+	e := testutil.New(t, nil)
+	tok := e.Token("t")
+	// Upload just before a second boundary: a truncated expires_at would
+	// already be (almost) in the past.
+	for time.Now().Nanosecond() < 900_000_000 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	before := time.Now()
+	it := up(t, e, tok, "?expires=1s", []byte("x"))
+	if exp := time.Unix(*it.ExpiresAt, 0); exp.Before(before.Add(time.Second)) {
+		t.Fatalf("expires_at %v is less than 1s after upload at %v", exp, before)
+	}
+}

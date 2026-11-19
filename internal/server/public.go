@@ -6,13 +6,12 @@ import (
 	"html/template"
 	"io"
 	"net/http"
-	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"time"
 
 	"tibi/internal/blob"
+	"tibi/internal/disposition"
 	"tibi/internal/id"
 	"tibi/internal/store"
 	"tibi/internal/units"
@@ -231,6 +230,9 @@ func RawContentType(mt string) string {
 }
 
 func (s *Server) serveBlob(w http.ResponseWriter, r *http.Request, it *store.Item, download bool) {
+	if s.cfg.BlobDelivery == "redirect" && redirectable(it, download) && s.redirectBlob(w, r, it, download) {
+		return
+	}
 	f, err := s.blobs.Open(r.Context(), blob.Key(it.SHA256))
 	if err != nil {
 		s.fail(w, err)
@@ -243,7 +245,7 @@ func (s *Server) serveBlob(w http.ResponseWriter, r *http.Request, it *store.Ite
 	h.Set("Cache-Control", s.rawCacheControl(it))
 	if download {
 		h.Set("Content-Type", "application/octet-stream")
-		h.Set("Content-Disposition", ContentDisposition(downloadName(it), it.ID+"."+it.Ext))
+		h.Set("Content-Disposition", disposition.Attachment(downloadName(it), it.ID+"."+it.Ext))
 	} else {
 		h.Set("Content-Type", RawContentType(it.Mime))
 		h.Set("Content-Disposition", "inline")
@@ -251,47 +253,56 @@ func (s *Server) serveBlob(w http.ResponseWriter, r *http.Request, it *store.Ite
 	http.ServeContent(w, r, "", time.Unix(it.CreatedAt, 0), f)
 }
 
-// ContentDisposition builds an attachment header carrying both an ASCII
-// filename (for tools such as curl -J and wget that ignore RFC 5987) and the
-// exact UTF-8 name in filename* (used by browsers).
-func ContentDisposition(name, fallback string) string {
-	ascii := asciiName(name)
-	if ascii != name && alnum(strings.TrimSuffix(ascii, path.Ext(ascii))) < 2 {
-		ascii = fallback // e.g. an all-Chinese name: "_ _(_).txt" helps nobody
+// redirectable reports whether a blob may be handed to the object store via
+// a presigned URL. The store's response lacks tibi's security headers, so
+// only passive media inline, or non-text non-active types as attachments,
+// qualify; text and anything that could execute are always proxied
+// (PLAN A7). Private and burn-after-read items are always proxied too, since
+// a presigned URL is a bearer link that bypasses access checks.
+func redirectable(it *store.Item, download bool) bool {
+	if it.Visibility == store.Private || it.BurnAfterRead {
+		return false
 	}
-	v := `attachment; filename="` + ascii + `"`
-	if ascii != name {
-		v += "; filename*=UTF-8''" + url.PathEscape(name)
+	if download {
+		return it.Kind != store.KindText && it.Kind != store.KindEncrypted && !activeTypes[strings.ToLower(it.Mime)]
 	}
-	return v
+	switch it.Kind {
+	case store.KindImage, store.KindVideo, store.KindAudio:
+		return passiveTypes[strings.ToLower(it.Mime)]
+	}
+	return false
 }
 
-// asciiName replaces characters that are not safe in a quoted ASCII
-// filename, collapsing runs into one underscore and keeping the extension.
-func asciiName(name string) string {
-	var b strings.Builder
-	under := false
-	for _, r := range name {
-		ok := r > 0x20 && r < 0x7f && r != '"' && r != '\\' && r != '/' && r != ';' && r != '%'
-		if ok || r == ' ' {
-			b.WriteRune(r)
-			under = false
-		} else if !under {
-			b.WriteByte('_')
-			under = true
-		}
-	}
-	return strings.TrimSpace(b.String())
-}
+// presignTTL is how long redirect URLs stay valid.
+const presignTTL = time.Hour
 
-func alnum(s string) int {
-	n := 0
-	for _, r := range s {
-		if r < 0x80 && (r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z') {
-			n++
+// redirectBlob sends a 302 to a presigned URL; false means "proxy instead"
+// (backend cannot presign, or presigning failed).
+func (s *Server) redirectBlob(w http.ResponseWriter, r *http.Request, it *store.Item, download bool) bool {
+	ttl := presignTTL
+	if it.ExpiresAt != nil {
+		left := time.Until(time.Unix(*it.ExpiresAt, 0))
+		if left <= 0 {
+			return false
 		}
+		ttl = min(ttl, left)
 	}
-	return n
+	filename, mt := "", RawContentType(it.Mime)
+	if download {
+		filename, mt = downloadName(it), "application/octet-stream"
+	}
+	u, ok, err := s.blobs.PresignGet(r.Context(), blob.Key(it.SHA256), ttl, filename, mt)
+	if err != nil {
+		s.log.Warn("presign failed; proxying", "id", it.ID, "err", err)
+		return false
+	}
+	if !ok {
+		return false
+	}
+	// Cache the redirect for a fraction of the URL's lifetime.
+	w.Header().Set("Cache-Control", "public, max-age="+strconv.Itoa(int(ttl.Seconds()/6)))
+	http.Redirect(w, r, u, http.StatusFound)
+	return true
 }
 
 // rawCacheControl lets public, permanent content be cached forever, while

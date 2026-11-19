@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"tibi/internal/blob"
 
 	"tibi/internal/config"
-	"tibi/internal/server"
+	"tibi/internal/disposition"
 	"tibi/internal/testutil"
 )
 
@@ -110,7 +111,7 @@ func TestSameContentTwiceSharesBlob(t *testing.T) {
 		t.Fatal("expected two IDs")
 	}
 	n := 0
-	e.Instance.Blobs.List(context.Background(), "", func(string) error { n++; return nil })
+	e.Instance.Blobs.List(context.Background(), "", func(blob.Info) error { n++; return nil })
 	if n != 1 {
 		t.Fatalf("blobs = %d, want 1", n)
 	}
@@ -277,7 +278,7 @@ func TestContentDisposition(t *testing.T) {
 		"题壁":            `attachment; filename="ID.txt"; filename*=UTF-8''%E9%A2%98%E5%A3%81`,
 	}
 	for in, want := range cases {
-		if got := server.ContentDisposition(in, "ID.txt"); got != want {
+		if got := disposition.Attachment(in, "ID.txt"); got != want {
 			t.Errorf("%q:\n got %s\nwant %s", in, got, want)
 		}
 	}

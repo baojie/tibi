@@ -4,6 +4,7 @@ package gc
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"tibi/internal/blob"
@@ -67,4 +68,64 @@ func Loop(ctx context.Context, st *store.Store, bs blob.Store, interval time.Dur
 		case <-t.C:
 		}
 	}
+}
+
+// OrphanMinAge protects blobs written moments ago by an upload that has not
+// inserted its row yet (possibly in another process, e.g. while
+// `tibi admin gc --orphans` runs beside the server).
+const OrphanMinAge = time.Hour
+
+// Orphans deletes stored blobs that no item row references and that are
+// older than minAge. Such blobs are left behind by crashes between storing a
+// blob and inserting its row. It returns how many it deleted.
+func Orphans(ctx context.Context, st *store.Store, bs blob.Store, minAge time.Duration) (int, error) {
+	var candidates []string
+	cutoff := time.Now().Add(-minAge)
+	err := bs.List(ctx, "", func(i blob.Info) error {
+		if i.ModTime.Before(cutoff) {
+			candidates = append(candidates, i.Key)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, key := range candidates {
+		sha := hashFromKey(key)
+		if sha == "" {
+			continue // not a blob key we manage
+		}
+		deleted, err := deleteKeyIfUnreferenced(ctx, st, bs, sha, key)
+		if err != nil {
+			return n, err
+		}
+		if deleted {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// hashFromKey extracts the sha256 from "ab/cd/<sha>" or
+// "thumb/ab/cd/<sha>-<w>.webp"; "" for anything else.
+func hashFromKey(key string) string {
+	base := key[strings.LastIndexByte(key, '/')+1:]
+	if i := strings.IndexAny(base, "-."); i >= 0 {
+		base = base[:i]
+	}
+	if len(base) != 64 || strings.Trim(base, "0123456789abcdef") != "" {
+		return ""
+	}
+	return base
+}
+
+func deleteKeyIfUnreferenced(ctx context.Context, st *store.Store, bs blob.Store, sha, key string) (bool, error) {
+	st.BlobMu.Lock()
+	defer st.BlobMu.Unlock()
+	ref, err := st.BlobReferenced(ctx, sha)
+	if err != nil || ref {
+		return false, err
+	}
+	return true, bs.Delete(ctx, key)
 }

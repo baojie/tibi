@@ -130,7 +130,13 @@ func (s *Server) expiresAt(exp string) (*int64, error) {
 	if err != nil || never {
 		return nil, err
 	}
-	at := s.store.Now().Add(d).Unix()
+	// Round up: expires_at has second resolution, and an item must never
+	// expire before the requested duration has passed.
+	t := s.store.Now().Add(d)
+	at := t.Unix()
+	if t.Nanosecond() > 0 {
+		at++
+	}
 	return &at, nil
 }
 

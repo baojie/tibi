@@ -84,6 +84,9 @@ func Load(path string, mustExist bool) (Server, error) {
 			if _, err := toml.DecodeFile(path, &c); err != nil {
 				return c, fmt.Errorf("config %s: %w", path, err)
 			}
+			if err := checkSecretsPerm(path, &c); err != nil {
+				return c, err
+			}
 		case os.IsNotExist(err) && !mustExist:
 		default:
 			return c, fmt.Errorf("config %s: %w", path, err)
@@ -114,9 +117,36 @@ func (c *Server) Validate() error {
 	switch c.Storage.Backend {
 	case "fs":
 	case "s3":
-		return fmt.Errorf("config: storage backend %q is not supported yet", c.Storage.Backend)
+		s3 := c.Storage.S3
+		if s3.Endpoint == "" || s3.Bucket == "" {
+			return fmt.Errorf("config: storage.s3 needs endpoint and bucket")
+		}
+		if s3.AccessKey == "" || s3.SecretKey == "" {
+			return fmt.Errorf("config: storage.s3 needs access_key and secret_key (prefer env TIBI_S3_ACCESS_KEY / TIBI_S3_SECRET_KEY)")
+		}
 	default:
-		return fmt.Errorf("config: unknown storage backend %q", c.Storage.Backend)
+		return fmt.Errorf("config: unknown storage backend %q (fs or s3)", c.Storage.Backend)
+	}
+	switch c.BlobDelivery {
+	case "proxy", "redirect":
+	default:
+		return fmt.Errorf("config: blob_delivery must be proxy or redirect")
+	}
+	return nil
+}
+
+// checkSecretsPerm refuses a config file that holds S3 credentials while
+// being readable by other users (PLAN A8.11).
+func checkSecretsPerm(path string, c *Server) error {
+	if c.Storage.S3.AccessKey == "" && c.Storage.S3.SecretKey == "" {
+		return nil
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if fi.Mode().Perm()&0o004 != 0 {
+		return fmt.Errorf("config %s holds S3 credentials but is world-readable; run: chmod 600 %s (or move the keys to TIBI_S3_ACCESS_KEY / TIBI_S3_SECRET_KEY)", path, path)
 	}
 	return nil
 }
@@ -144,6 +174,7 @@ func applyEnv(c *Server, getenv func(string) string) error {
 		"TIBI_S3_ACCESS_KEY":   &c.Storage.S3.AccessKey,
 		"TIBI_S3_SECRET_KEY":   &c.Storage.S3.SecretKey,
 		"TIBI_DEFAULT_LOCALE":  &c.DefaultLocale,
+		"TIBI_BLOB_DELIVERY":   &c.BlobDelivery,
 	}
 	for k, p := range str {
 		if v, ok := lookup(getenv, k); ok {

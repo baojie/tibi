@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"tibi/internal/blob"
 
 	"tibi/internal/config"
 	"tibi/internal/ingest"
@@ -109,7 +110,7 @@ func TestJPEGMetadataStripped(t *testing.T) {
 	}
 	// Two different blobs: stripped and original.
 	n := 0
-	e.Instance.Blobs.List(context.Background(), "", func(string) error { n++; return nil })
+	e.Instance.Blobs.List(context.Background(), "", func(blob.Info) error { n++; return nil })
 	if n != 2 {
 		t.Fatalf("blobs = %d, want 2", n)
 	}
@@ -136,7 +137,7 @@ func TestWebPStrippedSameImageDedup(t *testing.T) {
 		t.Fatal("WebP metadata served")
 	}
 	n := 0
-	e.Instance.Blobs.List(context.Background(), "", func(string) error { n++; return nil })
+	e.Instance.Blobs.List(context.Background(), "", func(blob.Info) error { n++; return nil })
 	if n != 1 {
 		t.Fatalf("blobs = %d, want 1", n)
 	}

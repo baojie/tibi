@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -30,5 +31,33 @@ func TestLoad(t *testing.T) {
 	t.Setenv("TIBI_MAX_UPLOAD_BYTES", "x")
 	if _, err := Load(p, true); err == nil {
 		t.Fatal("bad env accepted")
+	}
+}
+
+func TestS3SecretsPermission(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "server.toml")
+	body := []byte("data_dir = \"/tmp/x\"\n[storage]\nbackend = \"s3\"\n[storage.s3]\nendpoint = \"s3.example.com\"\nbucket = \"b\"\naccess_key = \"AK\"\nsecret_key = \"SK\"\n")
+	os.WriteFile(p, body, 0o644)
+	os.Chmod(p, 0o644)
+	if _, err := Load(p, true); err == nil || !strings.Contains(err.Error(), "world-readable") {
+		t.Fatalf("world-readable secrets accepted: %v", err)
+	}
+	os.Chmod(p, 0o600)
+	c, err := Load(p, true)
+	if err != nil || c.Storage.Backend != "s3" {
+		t.Fatalf("0600 rejected: %v", err)
+	}
+	// Keys from the environment are fine with a world-readable file.
+	os.WriteFile(p, []byte("data_dir = \"/tmp/x\"\n[storage]\nbackend = \"s3\"\n[storage.s3]\nendpoint = \"e\"\nbucket = \"b\"\n"), 0o644)
+	os.Chmod(p, 0o644)
+	t.Setenv("TIBI_S3_ACCESS_KEY", "AK")
+	t.Setenv("TIBI_S3_SECRET_KEY", "SK")
+	if _, err := Load(p, true); err != nil {
+		t.Fatalf("env keys: %v", err)
+	}
+	t.Setenv("TIBI_S3_SECRET_KEY", "")
+	if _, err := Load(p, true); err == nil {
+		t.Fatal("missing secret accepted")
 	}
 }

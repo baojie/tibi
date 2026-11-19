@@ -71,3 +71,32 @@ func (s *Store) BlobReferenced(ctx context.Context, sha string) (bool, error) {
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM items WHERE sha256 = ?`, sha).Scan(&n)
 	return n > 0, err
 }
+
+// BlobHashes calls fn for every distinct blob referenced by any item row
+// (live, expired or soft-deleted), with the MIME type of its stored bytes.
+func (s *Store) BlobHashes(ctx context.Context, fn func(sha, mime string) error) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT sha256, MIN(mime) FROM items GROUP BY sha256 ORDER BY sha256`)
+	if err != nil {
+		return err
+	}
+	type pair struct{ sha, mime string }
+	var all []pair
+	for rows.Next() {
+		var p pair
+		if err := rows.Scan(&p.sha, &p.mime); err != nil {
+			rows.Close()
+			return err
+		}
+		all = append(all, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, p := range all {
+		if err := fn(p.sha, p.mime); err != nil {
+			return err
+		}
+	}
+	return nil
+}
