@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"html/template"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"tibi/internal/blob"
 	"tibi/internal/disposition"
 	"tibi/internal/id"
+	"tibi/internal/ingest"
 	"tibi/internal/store"
 	"tibi/internal/units"
 )
@@ -45,6 +47,8 @@ func (s *Server) handleItemRoutes(w http.ResponseWriter, r *http.Request) {
 		s.handleRaw(w, r, parts[0])
 	case len(parts) == 2 && parts[1] == "dl":
 		s.handleDownload(w, r, parts[0])
+	case len(parts) == 2 && parts[1] == "thumb":
+		s.handleThumb(w, r, parts[0])
 	default:
 		notFound(w)
 	}
@@ -89,6 +93,31 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, itemID s
 		return
 	}
 	s.serveRaw(w, r, it, acc, true)
+}
+
+// handleThumb serves the WebP thumbnail of an image (an extension of the
+// frozen URL scheme; used by collections and link previews).
+func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request, itemID string) {
+	it, acc, err := s.lookup(r, itemID)
+	if err == nil && (!it.Thumb || (it.BurnAfterRead && !acc.privileged)) {
+		err = store.ErrNotFound
+	}
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	f, err := s.blobs.Open(r.Context(), blob.ThumbKey(it.SHA256, ingest.ThumbWidth))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	defer f.Close()
+	h := w.Header()
+	h.Set("Content-Type", "image/webp")
+	h.Set("Content-Security-Policy", rawCSP)
+	h.Set("Cross-Origin-Resource-Policy", "cross-origin")
+	h.Set("Cache-Control", s.rawCacheControl(it))
+	http.ServeContent(w, r, "", time.Unix(it.CreatedAt, 0), f)
 }
 
 // serveRaw serves bytes, except that burn-after-read items are never served
@@ -339,6 +368,7 @@ type viewModel struct {
 	Markdown    string
 	Text        *textView
 	Expires     string
+	Duration    string
 	// Burned is set when a burn-after-read item is shown on reveal: it is
 	// already deleted, so no raw/download links are offered.
 	Burned bool
@@ -365,11 +395,18 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 		Markdown:    j.Markdown,
 		Burned:      o.burned,
 	}
+	if it.DurationMS != nil {
+		vm.Duration = formatDuration(*it.DurationMS)
+	}
 	if it.ExpiresAt != nil {
 		vm.Expires = time.Unix(*it.ExpiresAt, 0).UTC().Format("2006-01-02 15:04 UTC")
 	}
 	page := "file"
 	switch it.Kind {
+	case store.KindVideo:
+		page = "video"
+	case store.KindAudio:
+		page = "audio"
 	case store.KindImage:
 		page = "image"
 		if o.burned {
@@ -433,6 +470,14 @@ func (s *Server) renderBurnNotice(w http.ResponseWriter, it *store.Item) {
 		Action string
 		Kind   string
 	}{"Burn after reading", "/" + it.ID + "/reveal", it.Kind}, true)
+}
+
+func formatDuration(ms int64) string {
+	sec := ms / 1000
+	if sec >= 3600 {
+		return fmt.Sprintf("%d:%02d:%02d", sec/3600, sec/60%60, sec%60)
+	}
+	return fmt.Sprintf("%d:%02d", sec/60, sec%60)
 }
 
 // viewCSP allows images and media from the raw origin when it differs.

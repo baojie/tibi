@@ -327,6 +327,9 @@ type ItemJSON struct {
 	Size          int64  `json:"size"`
 	Width         *int   `json:"width,omitempty"`
 	Height        *int   `json:"height,omitempty"`
+	DurationMS    *int64 `json:"duration_ms,omitempty"`
+	OrigMime      string `json:"orig_mime,omitempty"`
+	ThumbnailURL  string `json:"thumbnail_url,omitempty"`
 	Markdown      string `json:"markdown"`
 	Filename      string `json:"filename,omitempty"`
 	Title         string `json:"title,omitempty"`
@@ -367,6 +370,10 @@ func (s *Server) itemJSON(it *store.Item) ItemJSON {
 	}
 	if it.Slug != "" {
 		j.SlugURL = s.cfg.BaseURL + "/s/" + it.Slug
+	}
+	j.DurationMS, j.OrigMime = it.DurationMS, it.OrigMime
+	if it.Thumb {
+		j.ThumbnailURL = s.cfg.RawBase() + "/" + it.ID + "/thumb"
 	}
 	j.Markdown = markdownFor(it, j.URL, j.RawURL)
 	return j

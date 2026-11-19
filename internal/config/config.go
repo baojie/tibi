@@ -127,6 +127,13 @@ func (c *Server) Validate() error {
 	default:
 		return fmt.Errorf("config: unknown storage backend %q (fs or s3)", c.Storage.Backend)
 	}
+	switch c.HEICConverter {
+	case "auto", "vips", "heif-convert", "magick", "off":
+	default:
+		if !strings.Contains(c.HEICConverter, "/") {
+			return fmt.Errorf("config: heic_converter must be auto, vips, heif-convert, magick, off or a command path")
+		}
+	}
 	switch c.BlobDelivery {
 	case "proxy", "redirect":
 	default:
@@ -175,6 +182,7 @@ func applyEnv(c *Server, getenv func(string) string) error {
 		"TIBI_S3_SECRET_KEY":   &c.Storage.S3.SecretKey,
 		"TIBI_DEFAULT_LOCALE":  &c.DefaultLocale,
 		"TIBI_BLOB_DELIVERY":   &c.BlobDelivery,
+		"TIBI_HEIC_CONVERTER":  &c.HEICConverter,
 	}
 	for k, p := range str {
 		if v, ok := lookup(getenv, k); ok {

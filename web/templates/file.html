@@ -6,6 +6,7 @@
     <dt>Size</dt><dd>{{.Size}}</dd>
     <dt>Type</dt><dd>{{.Item.Mime}}</dd>
   </dl>
+  {{if or (eq .Item.Mime "image/heic") (eq .Item.Mime "image/heif")}}<p class="notice muted">HEIC photo: most browsers cannot display this format, so it is offered for download. (This server has no HEIC converter enabled.)</p>{{end}}
   {{template "notices" .}}
   <p class="actions">
     <a class="button" href="{{.DownloadURL}}">Download</a>

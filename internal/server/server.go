@@ -41,18 +41,31 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		log = slog.Default()
 	}
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"file", "image", "text", "burn"} {
+	for _, name := range []string{"file", "image", "text", "burn", "video", "audio"} {
 		t, err := template.ParseFS(web.Templates, "templates/layout.html", "templates/"+name+".html")
 		if err != nil {
 			return nil, err
 		}
 		pages[name] = t
 	}
+	var heic *ingest.Converter
+	if cfg.ConvertHEIC {
+		c, err := ingest.DetectConverter(cfg.HEICConverter)
+		if err != nil {
+			log.Warn("HEIC conversion disabled", "err", err)
+		} else if c == nil {
+			log.Info("no HEIC converter found (vips, heif-convert or magick); HEIC photos are stored as-is")
+		} else {
+			log.Info("HEIC converter", "tool", c.Name)
+		}
+		heic = c
+	}
 	s := &Server{
-		cfg:         cfg,
-		store:       st,
-		blobs:       bs,
-		ingest:      &ingest.Pipeline{Store: st, Blobs: bs, TempDir: tempDir, StripImageMeta: cfg.StripImageMeta},
+		cfg:   cfg,
+		store: st,
+		blobs: bs,
+		ingest: &ingest.Pipeline{Store: st, Blobs: bs, TempDir: tempDir, StripImageMeta: cfg.StripImageMeta,
+			HEIC: heic, Log: log},
 		tempDir:     tempDir,
 		renderCache: render.NewCache(64 << 20),
 		chromaCSS:   render.CSS(),

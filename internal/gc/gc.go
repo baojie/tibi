@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"tibi/internal/blob"
+	"tibi/internal/ingest"
 	"tibi/internal/store"
 )
 
@@ -45,6 +46,9 @@ func deleteIfUnreferenced(ctx context.Context, st *store.Store, bs blob.Store, s
 	defer st.BlobMu.Unlock()
 	ref, err := st.BlobReferenced(ctx, sha)
 	if err != nil || ref {
+		return false, err
+	}
+	if err := bs.Delete(ctx, blob.ThumbKey(sha, ingest.ThumbWidth)); err != nil {
 		return false, err
 	}
 	return true, bs.Delete(ctx, blob.Key(sha))

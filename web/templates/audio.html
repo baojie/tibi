@@ -1,0 +1,18 @@
+{{define "content"}}
+<section class="item item-media">
+  <audio class="player" controls preload="metadata" src="{{.EmbedURL}}"></audio>
+  <h1>{{.Title}}</h1>
+  <dl class="meta">
+    {{with .Duration}}<dt>Length</dt><dd>{{.}}</dd>{{end}}
+    <dt>Size</dt><dd>{{.Size}}</dd>
+    <dt>Type</dt><dd>{{.Item.Mime}}</dd>
+  </dl>
+  {{template "notices" .}}
+  <div class="copy-rows">
+    <label>Link<input readonly value="{{.URL}}"></label><button type="button" class="button secondary" data-copy="{{.URL}}">Copy</button>
+    <label>Direct<input readonly value="{{.EmbedURL}}"></label><button type="button" class="button secondary" data-copy="{{.EmbedURL}}">Copy</button>
+  </div>
+  <p class="actions"><a class="button" href="{{.DownloadURL}}">Download</a></p>
+</section>
+<script src="/static/copy.js" defer></script>
+{{end}}

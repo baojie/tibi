@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"tibi/internal/blob"
@@ -42,10 +43,22 @@ func (e *Env) GC() gc.Result {
 	return res
 }
 
-// BlobCount counts stored blobs.
+// BlobCount counts stored content blobs (not thumbnails).
 func (e *Env) BlobCount() int {
 	n := 0
-	e.Instance.Blobs.List(context.Background(), "", func(blob.Info) error { n++; return nil })
+	e.Instance.Blobs.List(context.Background(), "", func(i blob.Info) error {
+		if !strings.HasPrefix(i.Key, "thumb/") {
+			n++
+		}
+		return nil
+	})
+	return n
+}
+
+// ThumbCount counts stored thumbnails.
+func (e *Env) ThumbCount() int {
+	n := 0
+	e.Instance.Blobs.List(context.Background(), "thumb/", func(blob.Info) error { n++; return nil })
 	return n
 }
 

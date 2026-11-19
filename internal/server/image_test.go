@@ -2,14 +2,12 @@ package server_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"strings"
 	"testing"
-	"tibi/internal/blob"
 
 	"tibi/internal/config"
 	"tibi/internal/ingest"
@@ -109,8 +107,7 @@ func TestJPEGMetadataStripped(t *testing.T) {
 		t.Fatal("X-Tibi-Keep-Meta did not preserve bytes")
 	}
 	// Two different blobs: stripped and original.
-	n := 0
-	e.Instance.Blobs.List(context.Background(), "", func(blob.Info) error { n++; return nil })
+	n := e.BlobCount()
 	if n != 2 {
 		t.Fatalf("blobs = %d, want 2", n)
 	}
@@ -136,8 +133,7 @@ func TestWebPStrippedSameImageDedup(t *testing.T) {
 	if _, body := get(t, a.RawURL); bytes.Contains(body, []byte(testimg.GPSMarker)) {
 		t.Fatal("WebP metadata served")
 	}
-	n := 0
-	e.Instance.Blobs.List(context.Background(), "", func(blob.Info) error { n++; return nil })
+	n := e.BlobCount()
 	if n != 1 {
 		t.Fatalf("blobs = %d, want 1", n)
 	}

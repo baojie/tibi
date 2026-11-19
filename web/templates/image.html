@@ -6,7 +6,7 @@
   <h1>{{.Title}}</h1>
   <dl class="meta">
     {{if .Item.Width}}<dt>Size</dt><dd>{{.Item.Width}} × {{.Item.Height}} · {{.Size}}</dd>{{else}}<dt>Size</dt><dd>{{.Size}}</dd>{{end}}
-    <dt>Type</dt><dd>{{.Item.Mime}}</dd>
+    <dt>Type</dt><dd>{{.Item.Mime}}{{with .Item.OrigMime}} (converted from {{.}}){{end}}</dd>
   </dl>
   {{template "notices" .}}
   {{if not .Burned}}

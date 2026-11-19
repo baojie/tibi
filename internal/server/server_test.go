@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"tibi/internal/blob"
 
 	"tibi/internal/config"
 	"tibi/internal/disposition"
@@ -110,8 +109,7 @@ func TestSameContentTwiceSharesBlob(t *testing.T) {
 	if a.ID == b.ID {
 		t.Fatal("expected two IDs")
 	}
-	n := 0
-	e.Instance.Blobs.List(context.Background(), "", func(blob.Info) error { n++; return nil })
+	n := e.BlobCount()
 	if n != 1 {
 		t.Fatalf("blobs = %d, want 1", n)
 	}
