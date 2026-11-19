@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.2
+  version: 0.0.3
   description: |
     Self-hosted image host + pastebin. Upload anything, get back a URL.
     This file is the source of truth for /api/v1.
@@ -47,17 +47,20 @@ paths:
         Two forms:
 
         **A. multipart/form-data** — one or more `file` parts plus optional
-        form fields (`title`, `kind`, `keep_meta`, `source`, `meta`). Each
+        form fields (`title`, `kind`, `lang`, `keep_meta`, `source`, `meta`). Each
         part's filename is used. Fields may come before or after the files.
         One file → an Item object; several → an array of Items, in order.
 
         **B. raw body** — the body is the content. Options are query
         parameters or the equivalent `X-Tibi-*` headers (`X-Tibi-Filename`,
-        `X-Tibi-Title`, `X-Tibi-Kind`, `X-Tibi-Keep-Meta`, `X-Tibi-Source`,
+        `X-Tibi-Title`, `X-Tibi-Kind`, `X-Tibi-Lang`, `X-Tibi-Keep-Meta`, `X-Tibi-Source`,
         `X-Tibi-Meta`).
 
         The kind is detected from the content: PNG/JPEG/GIF/WebP/AVIF →
-        `image`; valid UTF-8 text → `text`; everything else, including SVG,
+        `image`; valid UTF-8 text → `text`; text in a recognizable legacy
+        charset (GBK/GB18030, Big5, Shift_JIS, EUC-JP, EUC-KR, Latin-1,
+        UTF-16 with BOM) is transcoded to UTF-8 (the original bytes are not
+        kept) and becomes `text` with `charset` set; everything else, including SVG,
         HTML, XHTML and JavaScript, → `file`. EXIF (incl. GPS), XMP and text
         metadata are stripped losslessly from JPEG/PNG/WebP unless
         `keep_meta=1` (JPEG orientation is kept). Requires scope `upload`.
@@ -68,6 +71,13 @@ paths:
           in: query
           description: force the kind; images and media cannot be forced
           schema: { type: string, enum: [text, file] }
+        - name: lang
+          in: query
+          description: |
+            language for syntax highlighting (a name, alias or extension,
+            e.g. `python`, `py`, `go`); inferred from filename and content
+            when omitted; unknown names are rejected with 400
+          schema: { type: string }
         - name: keep_meta
           in: query
           description: keep image metadata (EXIF/GPS/XMP)
@@ -89,6 +99,7 @@ paths:
                   items: { type: string, format: binary }
                 title: { type: string }
                 kind: { type: string, enum: [text, file] }
+                lang: { type: string }
                 keep_meta: { type: string }
                 source: { type: string }
                 meta: { type: string }
@@ -156,6 +167,8 @@ components:
         markdown: { type: string, description: "![](raw_url) for images, [name](url) otherwise" }
         filename: { type: string }
         title: { type: string }
+        lang: { type: string, description: "text: canonical language, e.g. go, python, markdown, text" }
+        charset: { type: string, description: "text: original charset if transcoded to UTF-8, e.g. GBK" }
         visibility: { type: string, enum: [unlisted, private] }
         expires_at: { type: [integer, "null"] }
         created_at: { type: integer }

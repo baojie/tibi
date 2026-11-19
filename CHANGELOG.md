@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.3] — Pastebin core
+
+### Added
+- Text view page: server-side syntax highlighting (chroma) with line numbers,
+  `#L12` and `#L12-L20` line links (shift-click selects a range), wrap
+  toggle, copy-all, raw and download. Light and dark themes.
+- Markdown pastes render (GFM, highlighted code blocks) with a
+  rendered/source toggle; raw HTML and dangerous link schemes are dropped.
+- Language inference: `lang` option > file extension > content (shebangs,
+  JSON, diffs, Go, Python, Rust, C, JS, SQL, Dockerfile, Makefile, Markdown,
+  …) > plain text. Item responses include `lang`; pastes without a filename
+  get a matching extension (`/{id}.py`).
+- Charset detection and transcoding to UTF-8 for GBK/GB18030, Big5,
+  Shift_JIS, EUC-JP, EUC-KR, Latin-1 and UTF-16 with BOM; the original charset
+  is recorded as `charset` and shown on the view page. Raw downloads serve the
+  transcoded UTF-8 (the original bytes are not kept).
+- Large text: the view shows the first `max_text_bytes` (default 2 MiB) with
+  a link to the full raw text; highlighting applies up to 256 KiB.
+- Rendered text views are cached in memory (content is immutable).
+- CLI: `tibi paste [-l LANG] [-t TITLE]` reads stdin or opens `$EDITOR`;
+  `-l/--lang` on all upload commands.
+
 ## [0.0.2] — Image hosting core
 
 ### Added
