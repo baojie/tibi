@@ -2,12 +2,14 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -39,23 +41,28 @@ func (e *Error) Error() string {
 
 // Item mirrors the API Item schema.
 type Item struct {
-	ID          string `json:"id"`
-	Kind        string `json:"kind"`
-	URL         string `json:"url"`
-	RawURL      string `json:"raw_url"`
-	DownloadURL string `json:"download_url"`
-	Mime        string `json:"mime"`
-	Size        int64  `json:"size"`
-	Width       *int   `json:"width,omitempty"`
-	Height      *int   `json:"height,omitempty"`
-	Markdown    string `json:"markdown"`
-	Filename    string `json:"filename,omitempty"`
-	Title       string `json:"title,omitempty"`
-	Lang        string `json:"lang,omitempty"`
-	Charset     string `json:"charset,omitempty"`
-	Visibility  string `json:"visibility"`
-	ExpiresAt   *int64 `json:"expires_at"`
-	CreatedAt   int64  `json:"created_at"`
+	ID            string `json:"id"`
+	Kind          string `json:"kind"`
+	URL           string `json:"url"`
+	RawURL        string `json:"raw_url"`
+	DownloadURL   string `json:"download_url"`
+	Mime          string `json:"mime"`
+	Size          int64  `json:"size"`
+	Width         *int   `json:"width,omitempty"`
+	Height        *int   `json:"height,omitempty"`
+	Markdown      string `json:"markdown"`
+	Filename      string `json:"filename,omitempty"`
+	Title         string `json:"title,omitempty"`
+	Lang          string `json:"lang,omitempty"`
+	Charset       string `json:"charset,omitempty"`
+	Visibility    string `json:"visibility"`
+	Slug          string `json:"slug,omitempty"`
+	SlugURL       string `json:"slug_url,omitempty"`
+	BurnAfterRead bool   `json:"burn_after_read"`
+	Source        string `json:"source,omitempty"`
+	ViewCount     int64  `json:"view_count"`
+	ExpiresAt     *int64 `json:"expires_at"`
+	CreatedAt     int64  `json:"created_at"`
 }
 
 // Whoami mirrors the API Whoami schema.
@@ -73,6 +80,10 @@ type UploadOptions struct {
 	Kind     string
 	Lang     string
 	KeepMeta bool
+	Expires  string // e.g. "1h", "7d", "never"; "" = server default
+	Private  bool
+	Slug     string
+	Burn     bool
 }
 
 func (c *Client) do(req *http.Request, out any) (json.RawMessage, error) {
@@ -136,6 +147,18 @@ func (c *Client) Upload(ctx context.Context, body io.Reader, size int64, o Uploa
 	if o.KeepMeta {
 		q.Set("keep_meta", "1")
 	}
+	if o.Expires != "" {
+		q.Set("expires", o.Expires)
+	}
+	if o.Private {
+		q.Set("visibility", "private")
+	}
+	if o.Slug != "" {
+		q.Set("slug", o.Slug)
+	}
+	if o.Burn {
+		q.Set("burn_after_read", "1")
+	}
 	u := c.Server + "/api/v1/items"
 	if len(q) > 0 {
 		u += "?" + q.Encode()
@@ -154,4 +177,72 @@ func (c *Client) Upload(ctx context.Context, body io.Reader, size int64, o Uploa
 		return nil, nil, err
 	}
 	return &it, raw, nil
+}
+
+// ListOptions filter List.
+type ListOptions struct {
+	Limit  int
+	Cursor string
+	Kind   string
+	Source string
+}
+
+// ListPage is one page of items.
+type ListPage struct {
+	Items      []Item  `json:"items"`
+	NextCursor *string `json:"next_cursor"`
+}
+
+// List returns items, newest first.
+func (c *Client) List(ctx context.Context, o ListOptions) (*ListPage, error) {
+	q := url.Values{}
+	if o.Limit > 0 {
+		q.Set("limit", strconv.Itoa(o.Limit))
+	}
+	for k, v := range map[string]string{"cursor": o.Cursor, "kind": o.Kind, "source": o.Source} {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Server+"/api/v1/items?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	var p ListPage
+	_, err = c.do(req, &p)
+	return &p, err
+}
+
+// Get returns an item's metadata and the raw JSON.
+func (c *Client) Get(ctx context.Context, id string) (*Item, json.RawMessage, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Server+"/api/v1/items/"+url.PathEscape(id), nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	var it Item
+	raw, err := c.do(req, &it)
+	return &it, raw, err
+}
+
+// Patch updates metadata fields (title, lang, visibility, expires, slug).
+func (c *Client) Patch(ctx context.Context, id string, fields map[string]string) (*Item, error) {
+	body, _ := json.Marshal(fields)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.Server+"/api/v1/items/"+url.PathEscape(id), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	var it Item
+	_, err = c.do(req, &it)
+	return &it, err
+}
+
+// Delete deletes an item.
+func (c *Client) Delete(ctx context.Context, id string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.Server+"/api/v1/items/"+url.PathEscape(id), nil)
+	if err != nil {
+		return err
+	}
+	_, err = c.do(req, nil)
+	return err
 }

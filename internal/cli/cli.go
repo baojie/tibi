@@ -31,6 +31,8 @@ type App struct {
 	Clipboard Clipboard
 	Getenv    func(string) string
 	HTTP      *http.Client
+	// OpenURL opens a URL in the browser; nil uses the system opener.
+	OpenURL func(string) error
 	// ReadSecret reads a line without echo; nil means plain line read.
 	ReadSecret func() (string, error)
 
@@ -58,6 +60,11 @@ usage:
   <cmd> | tibi                     upload stdin
   tibi clip                        upload the clipboard (image preferred, else text)
   tibi paste [-l LANG] [-t TITLE]  paste text from stdin, or write it in $EDITOR
+  tibi ls [-n 20] [--kind K] [--source S]   list recent items
+  tibi info ID                     show an item's details
+  tibi rm ID...                    delete items
+  tibi open ID                     open an item in the browser
+  tibi slug ID NAME                set a custom short link /s/NAME ("" clears)
   tibi serve [--config PATH]       run the server
   tibi admin ...                   manage the server (tokens)
 
@@ -69,6 +76,10 @@ upload flags:
       --raw          print the direct/raw URL instead of the page URL
       --keep-meta    keep image metadata (EXIF/GPS is stripped by default)
       --no-copy      do not copy the result to the clipboard
+  -e, --expire DUR   expire after DUR (10m, 1h, 7d, 30d, never)
+  -p, --private      only visible with a read_private token
+      --slug NAME    custom short link /s/NAME
+      --burn         burn after reading: deleted after the first view
       --json         print the full API response
 `
 
@@ -91,6 +102,16 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		err = a.clip(ctx, args[1:])
 	case "paste":
 		err = a.paste(ctx, args[1:])
+	case "ls":
+		err = a.ls(ctx, args[1:])
+	case "info":
+		err = a.info(ctx, args[1:])
+	case "rm":
+		err = a.rm(ctx, args[1:])
+	case "open":
+		err = a.open(ctx, args[1:])
+	case "slug":
+		err = a.slugCmd(ctx, args[1:])
 	case "help", "-h", "--help":
 		fmt.Fprint(a.Stdout, Usage)
 		return 0
@@ -219,6 +240,8 @@ func (a *App) login(ctx context.Context, args []string) error {
 // outFlags are the flags shared by upload commands.
 type outFlags struct {
 	name, title, lang    string
+	expire, slug         string
+	private, burn        bool
 	md, raw, json, nocpy bool
 	keepMeta             bool
 }
@@ -234,6 +257,10 @@ func (a *App) uploadFlags(name string) (*pflag.FlagSet, *outFlags) {
 	fs.BoolVar(&o.json, "json", false, "print full API response")
 	fs.BoolVar(&o.nocpy, "no-copy", false, "do not copy to clipboard")
 	fs.BoolVar(&o.keepMeta, "keep-meta", false, "keep image metadata")
+	fs.StringVarP(&o.expire, "expire", "e", "", "expire after, e.g. 10m, 1h, 7d, never")
+	fs.BoolVarP(&o.private, "private", "p", false, "private: visible only with a read_private token")
+	fs.StringVar(&o.slug, "slug", "", "custom short link /s/NAME")
+	fs.BoolVar(&o.burn, "burn", false, "burn after reading: deleted after the first view")
 	return fs, o
 }
 
@@ -358,7 +385,15 @@ func (a *App) clip(ctx context.Context, args []string) error {
 }
 
 func (a *App) uploadOptions(o *outFlags) client.UploadOptions {
-	return client.UploadOptions{Filename: o.name, Title: o.title, Lang: o.lang, Source: "cli", KeepMeta: o.keepMeta}
+	if o.expire == "" {
+		if cfg, err := a.loadConfig(); err == nil {
+			o.expire = cfg.DefaultExpires
+		}
+	}
+	return client.UploadOptions{
+		Filename: o.name, Title: o.title, Lang: o.lang, Source: "cli", KeepMeta: o.keepMeta,
+		Expires: o.expire, Private: o.private, Slug: o.slug, Burn: o.burn,
+	}
 }
 
 func displayName(f string) string {
