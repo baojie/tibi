@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.3
+  version: 0.0.4
   description: |
     Self-hosted image host + pastebin. Upload anything, get back a URL.
     This file is the source of truth for /api/v1.
@@ -47,13 +47,15 @@ paths:
         Two forms:
 
         **A. multipart/form-data** — one or more `file` parts plus optional
-        form fields (`title`, `kind`, `lang`, `keep_meta`, `source`, `meta`). Each
+        form fields (`title`, `kind`, `lang`, `keep_meta`, `expires`,
+        `visibility`, `slug`, `burn_after_read`, `source`, `meta`). Each
         part's filename is used. Fields may come before or after the files.
         One file → an Item object; several → an array of Items, in order.
 
         **B. raw body** — the body is the content. Options are query
         parameters or the equivalent `X-Tibi-*` headers (`X-Tibi-Filename`,
-        `X-Tibi-Title`, `X-Tibi-Kind`, `X-Tibi-Lang`, `X-Tibi-Keep-Meta`, `X-Tibi-Source`,
+        `X-Tibi-Title`, `X-Tibi-Kind`, `X-Tibi-Lang`, `X-Tibi-Keep-Meta`,
+        `X-Tibi-Expires`, `X-Tibi-Visibility`, `X-Tibi-Slug`, `X-Tibi-Burn-After-Read`, `X-Tibi-Source`,
         `X-Tibi-Meta`).
 
         The kind is detected from the content: PNG/JPEG/GIF/WebP/AVIF →
@@ -82,6 +84,22 @@ paths:
           in: query
           description: keep image metadata (EXIF/GPS/XMP)
           schema: { type: string, enum: ["0", "1", "true", "false"] }
+        - name: expires
+          in: query
+          description: "lifetime: e.g. 10m, 1h, 7d, 30d, never (default: server default_expires)"
+          schema: { type: string }
+        - name: visibility
+          in: query
+          description: "private items are served only to tokens with read_private"
+          schema: { type: string, enum: [unlisted, private], default: unlisted }
+        - name: slug
+          in: query
+          description: "custom short link /s/{slug}: [a-z0-9-]{3,64}, not reserved; moves from any item that had it; single-file uploads only"
+          schema: { type: string }
+        - name: burn_after_read
+          in: query
+          description: "delete after the first reveal by a client without a read_private token"
+          schema: { type: string, enum: ["0", "1", "true", "false"] }
         - { name: source, in: query, schema: { type: string }, description: "client tag, e.g. cli, chrome, adseen" }
         - { name: meta, in: query, schema: { type: string }, description: "JSON object of client metadata" }
       requestBody:
@@ -101,6 +119,10 @@ paths:
                 kind: { type: string, enum: [text, file] }
                 lang: { type: string }
                 keep_meta: { type: string }
+                expires: { type: string }
+                visibility: { type: string, enum: [unlisted, private] }
+                slug: { type: string }
+                burn_after_read: { type: string }
                 source: { type: string }
                 meta: { type: string }
       responses:
@@ -116,6 +138,77 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
+    get:
+      summary: List items, newest first
+      description: Live items only (not deleted or expired), including private ones. Requires scope `upload`.
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string }, description: "next_cursor from the previous page" }
+        - { name: kind, in: query, schema: { type: string, enum: [image, video, audio, text, file, encrypted] } }
+        - { name: source, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: A page of items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Item" } }
+                  next_cursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/items/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      summary: Item metadata (any visibility)
+      description: Requires scope `upload`.
+      responses:
+        "200":
+          description: The item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Item" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      summary: Change metadata (content is immutable)
+      description: |
+        Only `title`, `lang` (text items), `visibility`, `expires` (relative
+        to now, or `never`) and `slug` (empty string clears it) may be set;
+        any other field is rejected. Requires scope `upload`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title: { type: string }
+                lang: { type: string }
+                visibility: { type: string, enum: [unlisted, private] }
+                expires: { type: string }
+                slug: { type: string }
+      responses:
+        "200":
+          description: The updated item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Item" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: Delete an item
+      description: Soft delete; the item 404s at once and is purged after a day. Requires scope `delete`.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     bearer:
@@ -170,5 +263,10 @@ components:
         lang: { type: string, description: "text: canonical language, e.g. go, python, markdown, text" }
         charset: { type: string, description: "text: original charset if transcoded to UTF-8, e.g. GBK" }
         visibility: { type: string, enum: [unlisted, private] }
+        slug: { type: string }
+        slug_url: { type: string, format: uri }
+        burn_after_read: { type: boolean }
+        source: { type: string }
+        view_count: { type: integer }
         expires_at: { type: [integer, "null"] }
         created_at: { type: integer }

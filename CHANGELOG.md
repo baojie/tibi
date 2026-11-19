@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.4] — Item management and lifecycle
+
+### Added
+- `GET /api/v1/items` (newest first, cursor pagination, `kind`/`source`
+  filters), `GET`, `PATCH` (title, lang, visibility, expires, slug — never
+  content) and `DELETE /api/v1/items/{id}` (scope `delete`, soft delete).
+- Expiry: `expires` on upload or patch (`10m`, `1h`, `7d`, `30d`, `never`,
+  …); server `default_expires` and client `default_expires` defaults.
+  Expired items 404 at once.
+- Garbage collection every 10 minutes (and `tibi admin gc`): expired items
+  and items deleted more than a day ago are purged, then blobs nothing
+  references. Uploads and GC are serialized per blob so a blob is never
+  deleted under a concurrent upload of the same content.
+- Private items: served only to requests with a `read_private` token; 404
+  otherwise, indistinguishable from missing items. `Cache-Control:
+  private, no-store`.
+- Custom slugs: `/s/{slug}` redirects to the item; slugs are pointers that
+  move on reassignment; reserved words are rejected; deletion releases them.
+- Burn after reading: unprivileged visitors get a "reveal" page (link
+  previewers' GETs and raw prefetches consume nothing); the POST reveal shows
+  the item once (images inlined, files downloaded) and deletes it. Concurrent
+  reveals: exactly one succeeds.
+- Raw responses of expiring items are cacheable only until expiry.
+- View pages show expiry, private and burn notices.
+- CLI: `tibi ls`, `info`, `rm`, `open`, `slug`; upload flags `-e/--expire`,
+  `-p/--private`, `--slug`, `--burn`. Commands accept item IDs or URLs.
+
+### Fixed
+- Items uploaded within the same second now list in upload order.
+
 ## [0.0.3] — Pastebin core
 
 ### Added
