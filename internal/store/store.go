@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -26,6 +27,10 @@ var ErrNotFound = errors.New("store: not found")
 type Store struct {
 	db  *sql.DB
 	Now func() time.Time
+	// BlobMu serializes "blob exists? → insert row" in uploads against
+	// "unreferenced? → delete blob" in GC, so GC never deletes a blob that a
+	// concurrent upload is about to reference.
+	BlobMu sync.Mutex
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

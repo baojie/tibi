@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var suffixes = map[string]int64{
@@ -46,4 +47,34 @@ func FormatBytes(n int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// ParseExpiry parses an expiry such as "10m", "1h", "7d", "2w", "30d" or
+// "never". never is true for "never" (and ""); d is then zero.
+func ParseExpiry(s string) (d time.Duration, never bool, err error) {
+	t := strings.ToLower(strings.TrimSpace(s))
+	if t == "" || t == "never" || t == "0" {
+		return 0, true, nil
+	}
+	mult := time.Duration(0)
+	switch {
+	case strings.HasSuffix(t, "d"):
+		mult, t = 24*time.Hour, strings.TrimSuffix(t, "d")
+	case strings.HasSuffix(t, "w"):
+		mult, t = 7*24*time.Hour, strings.TrimSuffix(t, "w")
+	case strings.HasSuffix(t, "y"):
+		mult, t = 365*24*time.Hour, strings.TrimSuffix(t, "y")
+	}
+	if mult != 0 {
+		n, err := strconv.ParseFloat(t, 64)
+		if err != nil || n <= 0 {
+			return 0, false, fmt.Errorf("invalid expiry %q (examples: 10m, 1h, 7d, never)", s)
+		}
+		return time.Duration(n * float64(mult)), false, nil
+	}
+	d, err = time.ParseDuration(t)
+	if err != nil || d <= 0 {
+		return 0, false, fmt.Errorf("invalid expiry %q (examples: 10m, 1h, 7d, never)", s)
+	}
+	return d, false, nil
 }

@@ -53,6 +53,8 @@ type Options struct {
 	Visibility string
 	Kind       string // "", "text" or "file"
 	Lang       string // language for text; inferred when empty
+	Slug       string
+	Burn       bool
 	KeepMeta   bool
 	Source     string
 	Meta       string
@@ -177,18 +179,20 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 	}
 
 	it := &store.Item{
-		Kind:       cl.Kind,
-		Mime:       cl.Mime,
-		Filename:   filename,
-		Size:       n,
-		Title:      o.Title,
-		Lang:       lang,
-		Charset:    charset,
-		Visibility: o.Visibility,
-		Source:     o.Source,
-		Meta:       o.Meta,
-		TokenID:    o.TokenID,
-		ExpiresAt:  o.ExpiresAt,
+		Kind:          cl.Kind,
+		Mime:          cl.Mime,
+		Filename:      filename,
+		Size:          n,
+		Title:         o.Title,
+		Lang:          lang,
+		Charset:       charset,
+		Visibility:    o.Visibility,
+		Slug:          o.Slug,
+		BurnAfterRead: o.Burn,
+		Source:        o.Source,
+		Meta:          o.Meta,
+		TokenID:       o.TokenID,
+		ExpiresAt:     o.ExpiresAt,
 	}
 
 	// 4. Images: strip metadata, read dimensions.
@@ -268,8 +272,11 @@ func (pr *Prepared) replace(dir string, b []byte) error {
 }
 
 // Commit runs step 5: store the blob (dedup by hash), then the DB row.
+// BlobMu keeps GC from deleting the blob between the check and the insert.
 func (p *Pipeline) Commit(ctx context.Context, pr *Prepared) error {
 	it := pr.Item
+	p.Store.BlobMu.Lock()
+	defer p.Store.BlobMu.Unlock()
 	key := blob.Key(it.SHA256)
 	exists, err := p.Blobs.Exists(ctx, key)
 	if err != nil {
