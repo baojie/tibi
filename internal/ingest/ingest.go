@@ -14,6 +14,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -44,6 +45,10 @@ type Pipeline struct {
 	Blobs          blob.Store
 	TempDir        string
 	StripImageMeta bool
+	// HEIC converts HEIC/HEIF to JPEG; nil stores such photos as-is.
+	HEIC *Converter
+	// Log receives non-fatal problems (failed conversion or thumbnail).
+	Log *slog.Logger
 }
 
 // Options are per-upload options supplied by the client.
@@ -65,8 +70,9 @@ type Options struct {
 
 // Prepared is an upload that has been spooled and classified but not stored.
 type Prepared struct {
-	Item *store.Item
-	file *os.File
+	Item  *store.Item
+	file  *os.File
+	thumb []byte // WebP thumbnail to store, if one must be created
 }
 
 // Close removes the spooled temp file.
@@ -133,6 +139,25 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 	head = head[:m]
 	filename := cleanFilename(o.Filename)
 	cl := Classify(head, filename, tmp, n)
+	// HEIC/HEIF photos become JPEG when a converter is available; the
+	// original type is kept in orig_mime.
+	var origMime string
+	if (cl.Mime == "image/heic" || cl.Mime == "image/heif") && p.HEIC != nil && o.Kind != store.KindFile {
+		jpg, err := p.HEIC.ToJPEG(ctx, tmp.Name(), 4*limit)
+		if err != nil {
+			p.warn("heic conversion failed; storing as-is", "err", err)
+		} else {
+			if err := pr.replace(p.TempDir, jpg); err != nil {
+				return nil, err
+			}
+			origMime, n = cl.Mime, int64(len(jpg))
+			cl = Class{Mime: "image/jpeg", Kind: store.KindImage}
+			if ext := path.Ext(filename); strings.EqualFold(ext, ".heic") || strings.EqualFold(ext, ".heif") {
+				filename = strings.TrimSuffix(filename, ext) + ".jpg"
+			}
+		}
+	}
+
 	var charset string
 	switch {
 	case o.Kind == store.KindFile:
@@ -163,6 +188,13 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 		charset = cs
 	}
 
+	var durationMS *int64
+	if cl.Kind == store.KindVideo || cl.Kind == store.KindAudio {
+		if d := MediaDuration(pr.file, n, cl.Mime); d > 0 {
+			durationMS = &d
+		}
+	}
+
 	var lang string
 	if cl.Kind == store.KindText {
 		if o.Lang != "" {
@@ -181,6 +213,8 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 	it := &store.Item{
 		Kind:          cl.Kind,
 		Mime:          cl.Mime,
+		OrigMime:      origMime,
+		DurationMS:    durationMS,
 		Filename:      filename,
 		Size:          n,
 		Title:         o.Title,
@@ -197,7 +231,7 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 
 	// 4. Images: strip metadata, read dimensions.
 	if it.Kind == store.KindImage {
-		if err := p.prepareImage(pr, it, o.KeepMeta); err != nil {
+		if err := p.prepareImage(pr, it, o.KeepMeta, origMime == ""); err != nil {
 			return nil, err
 		}
 	}
@@ -216,11 +250,14 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 	}
 	it.SHA256 = hex.EncodeToString(h.Sum(nil))
 	pr.Item = it
+	if it.Kind == store.KindImage {
+		p.prepareThumb(ctx, pr)
+	}
 	ok = true
 	return pr, nil
 }
 
-func (p *Pipeline) prepareImage(pr *Prepared, it *store.Item, keepMeta bool) error {
+func (p *Pipeline) prepareImage(pr *Prepared, it *store.Item, keepMeta, keepOrientation bool) error {
 	data, err := os.ReadFile(pr.file.Name())
 	if err != nil {
 		return err
@@ -228,7 +265,7 @@ func (p *Pipeline) prepareImage(pr *Prepared, it *store.Item, keepMeta bool) err
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err == nil {
 		w, h := cfg.Width, cfg.Height
-		if it.Mime == "image/jpeg" && JPEGOrientation(data) >= 5 {
+		if it.Mime == "image/jpeg" && keepOrientation && JPEGOrientation(data) >= 5 {
 			w, h = h, w // displayed rotated by 90°
 		}
 		it.Width, it.Height = &w, &h
@@ -240,7 +277,7 @@ func (p *Pipeline) prepareImage(pr *Prepared, it *store.Item, keepMeta bool) err
 	if keepMeta || !p.StripImageMeta {
 		return nil
 	}
-	stripped, err := StripMeta(it.Mime, data)
+	stripped, err := stripMeta(it.Mime, data, keepOrientation)
 	if err != nil {
 		it.Kind = store.KindFile // malformed; never render it
 		return nil
@@ -271,6 +308,33 @@ func (pr *Prepared) replace(dir string, b []byte) error {
 	return nil
 }
 
+// prepareThumb renders the thumbnail unless the same image already has one.
+func (p *Pipeline) prepareThumb(ctx context.Context, pr *Prepared) {
+	it := pr.Item
+	if ok, err := p.Blobs.Exists(ctx, blob.ThumbKey(it.SHA256, ThumbWidth)); err == nil && ok {
+		it.Thumb = true
+		return
+	}
+	data, err := os.ReadFile(pr.file.Name())
+	if err != nil {
+		return
+	}
+	thumb, err := MakeThumb(data, it.Mime)
+	if err != nil {
+		if !errors.Is(err, errNoThumb) {
+			p.warn("thumbnail failed", "err", err)
+		}
+		return
+	}
+	pr.thumb = thumb
+}
+
+func (p *Pipeline) warn(msg string, args ...any) {
+	if p.Log != nil {
+		p.Log.Warn(msg, args...)
+	}
+}
+
 // Commit runs step 5: store the blob (dedup by hash), then the DB row.
 // BlobMu keeps GC from deleting the blob between the check and the insert.
 func (p *Pipeline) Commit(ctx context.Context, pr *Prepared) error {
@@ -288,6 +352,16 @@ func (p *Pipeline) Commit(ctx context.Context, pr *Prepared) error {
 		}
 		if err := p.Blobs.Put(ctx, key, pr.file, it.Size, it.Mime); err != nil {
 			return err
+		}
+	}
+	if pr.thumb != nil {
+		tk := blob.ThumbKey(it.SHA256, ThumbWidth)
+		if ok, _ := p.Blobs.Exists(ctx, tk); ok {
+			it.Thumb = true
+		} else if err := p.Blobs.Put(ctx, tk, bytes.NewReader(pr.thumb), int64(len(pr.thumb)), "image/webp"); err == nil {
+			it.Thumb = true
+		} else {
+			p.warn("storing thumbnail failed", "err", err)
 		}
 	}
 	return p.Store.CreateItem(ctx, it)
@@ -330,10 +404,18 @@ func Ext(kind, filename, mimeType string) string {
 			return e
 		}
 	}
+	if kind == store.KindVideo || kind == store.KindAudio {
+		if e, ok := mediaMimes[mimeType]; ok {
+			return e
+		}
+	}
 	if e := extFromName(filename); e != "" {
 		return e
 	}
 	if e, ok := imageMimes[mimeType]; ok {
+		return e
+	}
+	if e, ok := mediaMimes[mimeType]; ok {
 		return e
 	}
 	switch mimeType {

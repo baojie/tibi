@@ -54,12 +54,18 @@ func Classify(head []byte, filename string, full io.ReaderAt, size int64) Class 
 		if _, ok := imageMimes[mt]; ok {
 			return Class{Mime: mt, Kind: store.KindImage}
 		}
-		return Class{Mime: mt, Kind: store.KindFile} // HEIC: converted in 0.0.6
+		return Class{Mime: mt, Kind: store.KindFile} // HEIC: the pipeline may convert it
 	}
 
 	detected, _, _ := mime.ParseMediaType(http.DetectContentType(head))
 	if _, ok := imageMimes[detected]; ok {
 		return Class{Mime: detected, Kind: store.KindImage}
+	}
+	if mt := sniffMedia(head, ext); mt != "" {
+		if strings.HasPrefix(mt, "video/") {
+			return Class{Mime: mt, Kind: store.KindVideo}
+		}
+		return Class{Mime: mt, Kind: store.KindAudio}
 	}
 	if mt, ok := activeByExt[ext]; ok {
 		return Class{Mime: mt, Kind: store.KindFile}
@@ -74,10 +80,15 @@ func Classify(head []byte, filename string, full io.ReaderAt, size int64) Class 
 	if bytes.Contains(lower, []byte("http://www.w3.org/1999/xhtml")) {
 		return Class{Mime: "application/xhtml+xml", Kind: store.KindFile}
 	}
+	if bytes.HasPrefix(head, []byte{0x1A, 0x45, 0xDF, 0xA3}) {
+		// Go reports every Matroska file as video/webm; only real WebM got
+		// through sniffMedia above.
+		return Class{Mime: "video/x-matroska", Kind: store.KindFile}
+	}
 	switch {
 	case strings.HasPrefix(detected, "video/"), strings.HasPrefix(detected, "audio/"),
 		detected == "application/ogg":
-		// Media kinds arrive in 0.0.6; keep the real type for inline raw.
+		// Other media (AVI, AIFF, MIDI, …): offered for download only.
 		return Class{Mime: detected, Kind: store.KindFile}
 	}
 	textual := detected == "text/xml" || http.DetectContentType(head) == "text/plain; charset=utf-8"

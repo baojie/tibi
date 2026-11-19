@@ -98,3 +98,57 @@ func WebPWithMeta() []byte {
 	binary.LittleEndian.PutUint32(out[4:], uint32(len(body)))
 	return append(out, body...)
 }
+
+func box(typ string, payload ...[]byte) []byte {
+	n := 8
+	for _, p := range payload {
+		n += len(p)
+	}
+	b := binary.BigEndian.AppendUint32(nil, uint32(n))
+	b = append(b, typ...)
+	for _, p := range payload {
+		b = append(b, p...)
+	}
+	return b
+}
+
+// MP4 returns a minimal ISO-BMFF file (ftyp brand, moov/mvhd with the given
+// duration, and an mdat of padding). It is not playable; it exercises
+// sniffing, duration parsing and Range. moovLast puts moov after mdat, as
+// many cameras write it.
+func MP4(brand string, durationMS uint32, mdatSize int, moovLast bool) []byte {
+	ftyp := box("ftyp", []byte(brand), []byte{0, 0, 2, 0}, []byte(brand), []byte("mp41"))
+	mvhd := make([]byte, 100)
+	binary.BigEndian.PutUint32(mvhd[12:], 1000)       // timescale
+	binary.BigEndian.PutUint32(mvhd[16:], durationMS) // duration
+	moov := box("moov", box("mvhd", mvhd))
+	mdat := box("mdat", make([]byte, mdatSize))
+	if moovLast {
+		return append(append(ftyp, mdat...), moov...)
+	}
+	return append(append(ftyp, moov...), mdat...)
+}
+
+// WAV returns a PCM WAV of the given length (8 kHz, mono, 16-bit).
+func WAV(durationMS int) []byte {
+	data := make([]byte, 8000*2*durationMS/1000)
+	le := binary.LittleEndian
+	b := []byte("RIFF")
+	b = le.AppendUint32(b, uint32(36+len(data)))
+	b = append(b, "WAVEfmt "...)
+	b = le.AppendUint32(b, 16)
+	b = le.AppendUint16(b, 1)    // PCM
+	b = le.AppendUint16(b, 1)    // mono
+	b = le.AppendUint32(b, 8000) // sample rate
+	b = le.AppendUint32(b, 16000)
+	b = le.AppendUint16(b, 2)
+	b = le.AppendUint16(b, 16)
+	b = append(b, "data"...)
+	b = le.AppendUint32(b, uint32(len(data)))
+	return append(b, data...)
+}
+
+// HEIC returns the header of a HEIC file: enough to be classified as one.
+func HEIC() []byte {
+	return append(box("ftyp", []byte("heic"), []byte{0, 0, 0, 0}, []byte("mif1heic")), make([]byte, 64)...)
+}

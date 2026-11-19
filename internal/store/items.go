@@ -37,6 +37,7 @@ type Item struct {
 	ID            string
 	Kind          string
 	Mime          string
+	OrigMime      string // set when converted (e.g. HEIC → JPEG)
 	Filename      string
 	Ext           string
 	Size          int64
@@ -46,6 +47,8 @@ type Item struct {
 	Charset       string
 	Width         *int
 	Height        *int
+	DurationMS    *int64
+	Thumb         bool // a thumbnail blob exists
 	Visibility    string
 	Slug          string
 	BurnAfterRead bool
@@ -98,11 +101,12 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 				}
 			}
 			_, err := tx.ExecContext(ctx, `INSERT INTO items
-				(id, kind, mime, filename, ext, size, sha256, title, lang, charset, width, height, visibility,
-				 slug, burn_after_read, source, meta, token_id, created_at, expires_at)
-				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-				it.ID, it.Kind, it.Mime, nullStr(it.Filename), it.Ext, it.Size, it.SHA256, nullStr(it.Title),
-				nullStr(it.Lang), nullStr(it.Charset), nullInt(it.Width), nullInt(it.Height), it.Visibility,
+				(id, kind, mime, orig_mime, filename, ext, size, sha256, title, lang, charset, width, height,
+				 duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, created_at, expires_at)
+				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				it.ID, it.Kind, it.Mime, nullStr(it.OrigMime), nullStr(it.Filename), it.Ext, it.Size, it.SHA256, nullStr(it.Title),
+				nullStr(it.Lang), nullStr(it.Charset), nullInt(it.Width), nullInt(it.Height),
+				nullInt64(it.DurationMS), it.Thumb, it.Visibility,
 				nullStr(it.Slug), it.BurnAfterRead, nullStr(it.Source), nullStr(it.Meta), it.TokenID,
 				it.CreatedAt, nullInt64(it.ExpiresAt))
 			return err
@@ -126,21 +130,25 @@ func (s *Store) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 	return tx.Commit()
 }
 
-const itemCols = `id, kind, mime, filename, ext, size, sha256, title, lang, charset, width, height,
-	visibility, slug, burn_after_read, source, meta, token_id, view_count, created_at, expires_at, deleted_at`
+const itemCols = `id, kind, mime, orig_mime, filename, ext, size, sha256, title, lang, charset, width, height,
+	duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, view_count, created_at, expires_at, deleted_at`
 
 func scanItem(sc interface{ Scan(...any) error }) (*Item, error) {
 	var it Item
-	var filename, title, lang, charset, slug, source, meta sql.NullString
-	var width, height, exp, del sql.NullInt64
-	err := sc.Scan(&it.ID, &it.Kind, &it.Mime, &filename, &it.Ext, &it.Size, &it.SHA256, &title,
-		&lang, &charset, &width, &height, &it.Visibility, &slug, &it.BurnAfterRead, &source, &meta,
+	var origMime, filename, title, lang, charset, slug, source, meta sql.NullString
+	var width, height, dur, exp, del sql.NullInt64
+	err := sc.Scan(&it.ID, &it.Kind, &it.Mime, &origMime, &filename, &it.Ext, &it.Size, &it.SHA256, &title,
+		&lang, &charset, &width, &height, &dur, &it.Thumb, &it.Visibility, &slug, &it.BurnAfterRead, &source, &meta,
 		&it.TokenID, &it.ViewCount, &it.CreatedAt, &exp, &del)
 	if err != nil {
 		return nil, err
 	}
 	it.Filename, it.Title, it.Lang, it.Charset = filename.String, title.String, lang.String, charset.String
 	it.Slug, it.Source, it.Meta = slug.String, source.String, meta.String
+	it.OrigMime = origMime.String
+	if dur.Valid {
+		it.DurationMS = &dur.Int64
+	}
 	if width.Valid && height.Valid {
 		w, h := int(width.Int64), int(height.Int64)
 		it.Width, it.Height = &w, &h

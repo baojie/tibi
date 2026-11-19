@@ -12,9 +12,16 @@ import (
 // JPEG, the EXIF Orientation tag is kept (as a minimal EXIF block) so photos
 // still display upright. Other types are returned unchanged.
 func StripMeta(mt string, b []byte) ([]byte, error) {
+	return stripMeta(mt, b, true)
+}
+
+// stripMeta is StripMeta with control over the JPEG orientation tag. Images
+// converted from HEIC already have their rotation applied to the pixels, so
+// their orientation tag must go too.
+func stripMeta(mt string, b []byte, keepOrientation bool) ([]byte, error) {
 	switch mt {
 	case "image/jpeg":
-		return stripJPEG(b)
+		return stripJPEG(b, keepOrientation)
 	case "image/png":
 		return stripPNG(b)
 	case "image/webp":
@@ -27,7 +34,7 @@ var errCorrupt = errors.New("corrupt image")
 
 // ---- JPEG ----
 
-func stripJPEG(b []byte) ([]byte, error) {
+func stripJPEG(b []byte, keepOrientation bool) ([]byte, error) {
 	if len(b) < 4 || b[0] != 0xFF || b[1] != 0xD8 {
 		return nil, errCorrupt
 	}
@@ -36,7 +43,7 @@ func stripJPEG(b []byte) ([]byte, error) {
 	orientation := 0
 	exifInserted := false
 	insertExif := func() {
-		if !exifInserted && orientation > 1 && orientation <= 8 {
+		if keepOrientation && !exifInserted && orientation > 1 && orientation <= 8 {
 			out = append(out, orientationAPP1(orientation)...)
 		}
 		exifInserted = true

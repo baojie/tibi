@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 	"time"
 )
 
@@ -33,4 +34,9 @@ type Info struct {
 // Key returns the storage key for a hex sha256: ab/cd/<sha256>.
 func Key(sha256hex string) string {
 	return sha256hex[0:2] + "/" + sha256hex[2:4] + "/" + sha256hex
+}
+
+// ThumbKey returns the key of a thumbnail: thumb/ab/cd/<sha256>-<w>.webp.
+func ThumbKey(sha256hex string, width int) string {
+	return "thumb/" + sha256hex[0:2] + "/" + sha256hex[2:4] + "/" + sha256hex + "-" + strconv.Itoa(width) + ".webp"
 }
