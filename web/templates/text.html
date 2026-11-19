@@ -1,0 +1,36 @@
+{{define "content"}}
+<section class="item item-text">
+  <div class="text-head">
+    <h1>{{.Title}}</h1>
+    <p class="sub">
+      <span>{{.Text.LangName}}</span>
+      <span>{{.Text.Lines}} {{if eq .Text.Lines 1}}line{{else}}lines{{end}}</span>
+      <span>{{.Size}}</span>
+      {{with .Item.Charset}}<span title="The original bytes were converted to UTF-8">converted from {{.}}</span>{{end}}
+    </p>
+  </div>
+  <div class="toolbar">
+    {{if .Text.IsMarkdown}}
+    <span class="tabs" role="tablist">
+      <button type="button" class="tab active" data-view="rendered" role="tab" aria-selected="true">Rendered</button>
+      <button type="button" class="tab" data-view="source" role="tab" aria-selected="false">Source</button>
+    </span>
+    {{end}}
+    <span class="spacer"></span>
+    <button type="button" class="button secondary" id="wrap-toggle" aria-pressed="false">Wrap</button>
+    <button type="button" class="button secondary" data-copy-url="{{.RawURL}}">Copy</button>
+    <a class="button secondary" href="{{.RawURL}}" rel="nofollow">Raw</a>
+    <a class="button secondary" href="{{.DownloadURL}}">Download</a>
+  </div>
+  {{if .Text.Truncated}}
+  <p class="notice">This text is {{.Size}}; showing the first {{.Text.ShownSize}} ({{.Text.Lines}} lines). <a href="{{.RawURL}}" rel="nofollow">View the full raw text</a>.</p>
+  {{end}}
+  {{if .Text.IsMarkdown}}
+  <article class="markdown" id="view-rendered">{{.Text.Rendered}}</article>
+  <div id="view-source" hidden>{{.Text.Code}}</div>
+  {{else}}
+  {{.Text.Code}}
+  {{end}}
+</section>
+<script src="/static/text.js" defer></script>
+{{end}}

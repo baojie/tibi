@@ -57,7 +57,7 @@ func (s *Server) handleItemOrRaw(w http.ResponseWriter, r *http.Request, name st
 		s.serveBlob(w, r, it, false)
 		return
 	}
-	s.renderView(w, it)
+	s.renderView(w, r, it)
 }
 
 func (s *Server) handleRaw(w http.ResponseWriter, r *http.Request, itemID string) {
@@ -174,9 +174,10 @@ type viewModel struct {
 	EmbedURL    string
 	DownloadURL string
 	Markdown    string
+	Text        *textView
 }
 
-func (s *Server) renderView(w http.ResponseWriter, it *store.Item) {
+func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.Item) {
 	title := it.Title
 	if title == "" {
 		title = downloadName(it)
@@ -193,8 +194,17 @@ func (s *Server) renderView(w http.ResponseWriter, it *store.Item) {
 		Markdown:    j.Markdown,
 	}
 	page := "file"
-	if it.Kind == store.KindImage {
+	switch it.Kind {
+	case store.KindImage:
 		page = "image"
+	case store.KindText:
+		tv, err := s.loadTextView(r.Context(), it)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		vm.Text = tv
+		page = "text"
 	}
 	var buf bytes.Buffer
 	if err := s.pages[page].ExecuteTemplate(&buf, "layout", vm); err != nil {
@@ -216,6 +226,6 @@ func (s *Server) viewCSP() string {
 	if raw := s.cfg.RawBaseURL; raw != "" && raw != s.cfg.BaseURL {
 		src += " " + raw
 	}
-	return "default-src 'self'; img-src " + src + " data:; media-src " + src +
+	return "default-src 'self'; img-src " + src + " data:; media-src " + src + "; connect-src " + src +
 		"; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 }

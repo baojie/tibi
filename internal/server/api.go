@@ -92,6 +92,7 @@ func (s *Server) uploadOptions(r *http.Request, get func(string) string) ingest.
 		Filename: get("filename"),
 		Title:    get("title"),
 		Kind:     get("kind"),
+		Lang:     get("lang"),
 		KeepMeta: truthy(get("keep_meta")),
 		Source:   get("source"),
 		Meta:     get("meta"),
@@ -274,6 +275,8 @@ type ItemJSON struct {
 	Markdown    string `json:"markdown"`
 	Filename    string `json:"filename,omitempty"`
 	Title       string `json:"title,omitempty"`
+	Lang        string `json:"lang,omitempty"`
+	Charset     string `json:"charset,omitempty"`
 	Visibility  string `json:"visibility"`
 	ExpiresAt   *int64 `json:"expires_at"`
 	CreatedAt   int64  `json:"created_at"`
@@ -290,6 +293,8 @@ func (s *Server) itemJSON(it *store.Item) ItemJSON {
 		Size:        it.Size,
 		Filename:    it.Filename,
 		Title:       it.Title,
+		Lang:        it.Lang,
+		Charset:     it.Charset,
 		Visibility:  it.Visibility,
 		ExpiresAt:   it.ExpiresAt,
 		CreatedAt:   it.CreatedAt,

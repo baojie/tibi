@@ -15,6 +15,7 @@ import (
 	"tibi/internal/blob"
 	"tibi/internal/config"
 	"tibi/internal/ingest"
+	"tibi/internal/render"
 	"tibi/internal/store"
 	"tibi/web"
 )
@@ -27,8 +28,11 @@ type Server struct {
 	ingest  *ingest.Pipeline
 	pages   map[string]*template.Template
 	tempDir string
-	log     *slog.Logger
-	mux     *http.ServeMux
+	// renderCache holds rendered text views (content is immutable).
+	renderCache *render.Cache
+	chromaCSS   []byte
+	log         *slog.Logger
+	mux         *http.ServeMux
 }
 
 // New builds the HTTP handler.
@@ -37,7 +41,7 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		log = slog.Default()
 	}
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"file", "image"} {
+	for _, name := range []string{"file", "image", "text"} {
 		t, err := template.ParseFS(web.Templates, "templates/layout.html", "templates/"+name+".html")
 		if err != nil {
 			return nil, err
@@ -45,14 +49,16 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		pages[name] = t
 	}
 	s := &Server{
-		cfg:     cfg,
-		store:   st,
-		blobs:   bs,
-		ingest:  &ingest.Pipeline{Store: st, Blobs: bs, TempDir: tempDir, StripImageMeta: cfg.StripImageMeta},
-		tempDir: tempDir,
-		pages:   pages,
-		log:     log,
-		mux:     http.NewServeMux(),
+		cfg:         cfg,
+		store:       st,
+		blobs:       bs,
+		ingest:      &ingest.Pipeline{Store: st, Blobs: bs, TempDir: tempDir, StripImageMeta: cfg.StripImageMeta},
+		tempDir:     tempDir,
+		renderCache: render.NewCache(64 << 20),
+		chromaCSS:   render.CSS(),
+		pages:       pages,
+		log:         log,
+		mux:         http.NewServeMux(),
 	}
 	s.routes()
 	return s, nil
@@ -63,6 +69,7 @@ func (s *Server) routes() {
 	m := s.mux
 	m.HandleFunc("GET /healthz", s.handleHealthz)
 	m.HandleFunc("GET /robots.txt", s.handleRobots)
+	m.HandleFunc("GET /static/chroma.css", s.handleChromaCSS)
 	m.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 
 	m.HandleFunc("GET /api/v1/openapi.yaml", s.handleOpenAPI)
