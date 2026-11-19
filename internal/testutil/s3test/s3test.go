@@ -60,14 +60,29 @@ func Config(t testing.TB) blob.S3Config {
 		}
 	}
 	t.Cleanup(func() {
+		// Remove every version and delete marker, so versioned buckets
+		// (e.g. Backblaze B2) are left clean too.
+		var objs []minio.ObjectInfo
+		for o := range c.ListObjects(ctx, cfg.Bucket, minio.ListObjectsOptions{Prefix: cfg.Prefix, Recursive: true, WithVersions: true}) {
+			if o.Err != nil {
+				break
+			}
+			objs = append(objs, o)
+		}
 		for o := range c.ListObjects(ctx, cfg.Bucket, minio.ListObjectsOptions{Prefix: cfg.Prefix, Recursive: true}) {
 			if o.Err == nil {
-				c.RemoveObject(ctx, cfg.Bucket, o.Key, minio.RemoveObjectOptions{})
+				objs = append(objs, o)
 			}
+		}
+		for _, o := range objs {
+			c.RemoveObject(ctx, cfg.Bucket, o.Key, minio.RemoveObjectOptions{VersionID: o.VersionID})
 		}
 	})
 	return cfg
 }
+
+// Client returns a raw S3 client for cfg (for tests that inspect the bucket).
+func Client(t testing.TB, cfg blob.S3Config) *minio.Client { return client(t, cfg) }
 
 func client(t testing.TB, cfg blob.S3Config) *minio.Client {
 	ep, secure := cfg.Endpoint, true

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/minio/minio-go/v7"
+
 	"tibi/internal/blob"
 	"tibi/internal/testutil/s3test"
 )
@@ -135,5 +137,33 @@ func TestConformance(t *testing.T) {
 				t.Fatal("path traversal accepted")
 			}
 		})
+	}
+}
+
+// Deleting must free storage on versioned buckets too: no versions or
+// delete markers may remain for the key.
+func TestS3DeleteRemovesAllVersions(t *testing.T) {
+	cfg := s3test.Config(t)
+	s, err := blob.NewS3(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	key := blob.Key(strings.Repeat("cd", 32))
+	for i := 0; i < 2; i++ { // two versions where versioning is on
+		s.Put(ctx, key, strings.NewReader("v"), 1, "")
+	}
+	if err := s.Delete(ctx, key); err != nil {
+		t.Fatal(err)
+	}
+	c := s3test.Client(t, cfg)
+	n := 0
+	for o := range c.ListObjects(ctx, cfg.Bucket, minio.ListObjectsOptions{Prefix: cfg.Prefix + key, WithVersions: true, Recursive: true}) {
+		if o.Err == nil {
+			n++
+		}
+	}
+	if n != 0 {
+		t.Fatalf("%d versions/markers left after delete", n)
 	}
 }

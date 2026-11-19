@@ -131,13 +131,45 @@ func (s *S3) Open(ctx context.Context, key string) (io.ReadSeekCloser, error) {
 }
 
 // Delete removes the object; a missing key is not an error.
+//
+// On versioned buckets (Backblaze B2 keeps every version by default, as do
+// AWS buckets with versioning on) a plain DELETE only hides the object
+// behind a delete marker and the bytes stay billed, so every version of the
+// key is removed explicitly.
 func (s *S3) Delete(ctx context.Context, key string) error {
 	name, err := s.obj(key)
 	if err != nil {
 		return err
 	}
+	var versions []string
+	lctx, cancel := context.WithCancel(ctx)
+	for o := range s.c.ListObjects(lctx, s.bucket, minio.ListObjectsOptions{Prefix: name, WithVersions: true, Recursive: true}) {
+		if o.Err != nil {
+			versions = nil // listing versions unsupported: plain delete below
+			break
+		}
+		if o.Key == name && o.VersionID != "" && o.VersionID != "null" {
+			versions = append(versions, o.VersionID)
+		}
+	}
+	cancel()
+	for _, v := range versions {
+		if err := s.c.RemoveObject(ctx, s.bucket, name, minio.RemoveObjectOptions{VersionID: v}); err != nil && !notFound(err) {
+			return fmt.Errorf("s3 delete %s (version %s): %w", key, v, err)
+		}
+	}
 	if err := s.c.RemoveObject(ctx, s.bucket, name, minio.RemoveObjectOptions{}); err != nil && !notFound(err) {
 		return fmt.Errorf("s3 delete %s: %w", key, err)
+	}
+	if len(versions) > 0 {
+		// The plain delete above may itself have left a marker; remove it.
+		lctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		for o := range s.c.ListObjects(lctx, s.bucket, minio.ListObjectsOptions{Prefix: name, WithVersions: true, Recursive: true}) {
+			if o.Err == nil && o.Key == name && o.VersionID != "" && o.VersionID != "null" {
+				s.c.RemoveObject(ctx, s.bucket, name, minio.RemoveObjectOptions{VersionID: o.VersionID})
+			}
+		}
 	}
 	return nil
 }
