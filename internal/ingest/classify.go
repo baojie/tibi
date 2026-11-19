@@ -17,6 +17,9 @@ import (
 type Class struct {
 	Mime string
 	Kind string
+	// MaybeText is set for text-looking content that is not UTF-8; the
+	// pipeline then tries charset detection and transcoding.
+	MaybeText bool
 }
 
 // imageMimes are rendered as images (PLAN A5 step 3).
@@ -49,46 +52,46 @@ func Classify(head []byte, filename string, full io.ReaderAt, size int64) Class 
 
 	if mt := sniffISOBMFF(head); mt != "" {
 		if _, ok := imageMimes[mt]; ok {
-			return Class{mt, store.KindImage}
+			return Class{Mime: mt, Kind: store.KindImage}
 		}
-		return Class{mt, store.KindFile} // HEIC: converted in 0.0.6
+		return Class{Mime: mt, Kind: store.KindFile} // HEIC: converted in 0.0.6
 	}
 
 	detected, _, _ := mime.ParseMediaType(http.DetectContentType(head))
 	if _, ok := imageMimes[detected]; ok {
-		return Class{detected, store.KindImage}
+		return Class{Mime: detected, Kind: store.KindImage}
 	}
 	if mt, ok := activeByExt[ext]; ok {
-		return Class{mt, store.KindFile}
+		return Class{Mime: mt, Kind: store.KindFile}
 	}
 	if detected == "text/html" {
-		return Class{"text/html", store.KindFile}
+		return Class{Mime: "text/html", Kind: store.KindFile}
 	}
 	lower := bytes.ToLower(head)
 	if bytes.Contains(lower, []byte("<svg")) {
-		return Class{"image/svg+xml", store.KindFile}
+		return Class{Mime: "image/svg+xml", Kind: store.KindFile}
 	}
 	if bytes.Contains(lower, []byte("http://www.w3.org/1999/xhtml")) {
-		return Class{"application/xhtml+xml", store.KindFile}
+		return Class{Mime: "application/xhtml+xml", Kind: store.KindFile}
 	}
 	switch {
 	case strings.HasPrefix(detected, "video/"), strings.HasPrefix(detected, "audio/"),
 		detected == "application/ogg":
 		// Media kinds arrive in 0.0.6; keep the real type for inline raw.
-		return Class{detected, store.KindFile}
+		return Class{Mime: detected, Kind: store.KindFile}
 	}
 	textual := detected == "text/xml" || http.DetectContentType(head) == "text/plain; charset=utf-8"
 	if textual && IsUTF8Text(io.NewSectionReader(full, 0, size)) {
 		if detected == "text/xml" {
-			return Class{"text/xml", store.KindText}
+			return Class{Mime: "text/xml", Kind: store.KindText}
 		}
-		return Class{"text/plain", store.KindText}
+		return Class{Mime: "text/plain", Kind: store.KindText}
 	}
 	if detected == "text/plain" {
-		// Not UTF-8 (e.g. UTF-16 BOM or legacy charset): charset handling is 0.0.3.
-		return Class{"application/octet-stream", store.KindFile}
+		// Not UTF-8: maybe UTF-16 with BOM or a legacy charset such as GBK.
+		return Class{Mime: "application/octet-stream", Kind: store.KindFile, MaybeText: true}
 	}
-	return Class{detected, store.KindFile}
+	return Class{Mime: detected, Kind: store.KindFile}
 }
 
 // sniffISOBMFF recognizes AVIF and HEIC/HEIF by their ftyp box.

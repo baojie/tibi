@@ -23,6 +23,7 @@ import (
 	_ "golang.org/x/image/webp"
 
 	"tibi/internal/blob"
+	"tibi/internal/render"
 	"tibi/internal/store"
 )
 
@@ -51,6 +52,7 @@ type Options struct {
 	Title      string
 	Visibility string
 	Kind       string // "", "text" or "file"
+	Lang       string // language for text; inferred when empty
 	KeepMeta   bool
 	Source     string
 	Meta       string
@@ -129,18 +131,48 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 	head = head[:m]
 	filename := cleanFilename(o.Filename)
 	cl := Classify(head, filename, tmp, n)
-	switch o.Kind {
-	case store.KindFile:
+	var charset string
+	switch {
+	case o.Kind == store.KindFile:
 		cl.Kind = store.KindFile
-	case store.KindText:
-		if cl.Kind != store.KindText {
-			if !IsUTF8Text(io.NewSectionReader(tmp, 0, n)) {
-				return nil, &BadRequestError{"kind=text requires valid UTF-8 text"}
+	case cl.Kind == store.KindText:
+	case o.Kind == store.KindText && IsUTF8Text(io.NewSectionReader(tmp, 0, n)):
+		if !strings.HasPrefix(cl.Mime, "text/") && !activeType(cl.Mime) {
+			cl.Mime = "text/plain"
+		}
+		cl.Kind = store.KindText
+	case cl.MaybeText || o.Kind == store.KindText:
+		data, err := os.ReadFile(tmp.Name())
+		if err != nil {
+			return nil, err
+		}
+		out, cs, ok := Transcode(data)
+		if !ok {
+			if o.Kind == store.KindText {
+				return nil, &BadRequestError{"kind=text requires UTF-8 text or a recognizable legacy charset"}
 			}
-			if !strings.HasPrefix(cl.Mime, "text/") && !activeType(cl.Mime) {
-				cl.Mime = "text/plain"
+			break
+		}
+		if err := pr.replace(p.TempDir, out); err != nil {
+			return nil, err
+		}
+		n = int64(len(out))
+		cl = Class{Mime: "text/plain", Kind: store.KindText}
+		charset = cs
+	}
+
+	var lang string
+	if cl.Kind == store.KindText {
+		if o.Lang != "" {
+			l, ok := render.ResolveLang(o.Lang)
+			if !ok {
+				return nil, &BadRequestError{fmt.Sprintf("unknown lang %q", o.Lang)}
 			}
-			cl.Kind = store.KindText
+			lang = l
+		} else {
+			sample := make([]byte, 64<<10)
+			m, _ := pr.file.ReadAt(sample, 0)
+			lang = render.InferLang(filename, sample[:m])
 		}
 	}
 
@@ -150,6 +182,8 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 		Filename:   filename,
 		Size:       n,
 		Title:      o.Title,
+		Lang:       lang,
+		Charset:    charset,
 		Visibility: o.Visibility,
 		Source:     o.Source,
 		Meta:       o.Meta,
@@ -164,6 +198,9 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 		}
 	}
 	it.Ext = Ext(it.Kind, filename, it.Mime)
+	if it.Kind == store.KindText && extFromName(filename) == "" {
+		it.Ext = render.ExtForLang(lang)
+	}
 
 	// Hash the stored bytes.
 	if _, err := pr.file.Seek(0, io.SeekStart); err != nil {
@@ -207,18 +244,26 @@ func (p *Pipeline) prepareImage(pr *Prepared, it *store.Item, keepMeta bool) err
 	if bytes.Equal(stripped, data) {
 		return nil
 	}
-	f, err := os.CreateTemp(p.TempDir, "upload-*")
+	if err := pr.replace(p.TempDir, stripped); err != nil {
+		return err
+	}
+	it.Size = int64(len(stripped))
+	return nil
+}
+
+// replace swaps the spooled file for one holding b.
+func (pr *Prepared) replace(dir string, b []byte) error {
+	f, err := os.CreateTemp(dir, "upload-*")
 	if err != nil {
 		return err
 	}
-	if _, err := f.Write(stripped); err != nil {
+	if _, err := f.Write(b); err != nil {
 		f.Close()
 		os.Remove(f.Name())
 		return err
 	}
 	pr.Close()
 	pr.file = f
-	it.Size = int64(len(stripped))
 	return nil
 }
 
@@ -278,7 +323,7 @@ func Ext(kind, filename, mimeType string) string {
 			return e
 		}
 	}
-	if e := strings.ToLower(strings.TrimPrefix(path.Ext(filename), ".")); extRe.MatchString(e) {
+	if e := extFromName(filename); e != "" {
 		return e
 	}
 	if e, ok := imageMimes[mimeType]; ok {
@@ -299,4 +344,12 @@ func Ext(kind, filename, mimeType string) string {
 		return "heic"
 	}
 	return "bin"
+}
+
+// extFromName returns the filename's extension if it is usable in a URL.
+func extFromName(filename string) string {
+	if e := strings.ToLower(strings.TrimPrefix(path.Ext(filename), ".")); extRe.MatchString(e) {
+		return e
+	}
+	return ""
 }

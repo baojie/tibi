@@ -29,6 +29,8 @@ type Item struct {
 	Size       int64
 	SHA256     string
 	Title      string
+	Lang       string
+	Charset    string
 	Width      *int
 	Height     *int
 	Visibility string
@@ -53,9 +55,10 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 	for attempt := 0; ; attempt++ {
 		it.ID = id.New()
 		_, err := s.db.ExecContext(ctx, `INSERT INTO items
-			(id, kind, mime, filename, ext, size, sha256, title, width, height, visibility, source, meta, token_id, created_at, expires_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			(id, kind, mime, filename, ext, size, sha256, title, lang, charset, width, height, visibility, source, meta, token_id, created_at, expires_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			it.ID, it.Kind, it.Mime, nullStr(it.Filename), it.Ext, it.Size, it.SHA256, nullStr(it.Title),
+			nullStr(it.Lang), nullStr(it.Charset),
 			nullInt(it.Width), nullInt(it.Height), it.Visibility, nullStr(it.Source), nullStr(it.Meta), it.TokenID, it.CreatedAt, exp)
 		if err != nil && strings.Contains(err.Error(), "UNIQUE") && strings.Contains(err.Error(), "items.id") && attempt < 5 {
 			continue
@@ -67,11 +70,11 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 // GetItem returns a live item: not deleted and not expired.
 func (s *Store) GetItem(ctx context.Context, itemID string) (*Item, error) {
 	var it Item
-	var filename, title, source, meta sql.NullString
+	var filename, title, lang, charset, source, meta sql.NullString
 	var exp, del, width, height sql.NullInt64
-	err := s.db.QueryRowContext(ctx, `SELECT id, kind, mime, filename, ext, size, sha256, title, width, height, visibility, source, meta, token_id, created_at, expires_at, deleted_at
+	err := s.db.QueryRowContext(ctx, `SELECT id, kind, mime, filename, ext, size, sha256, title, lang, charset, width, height, visibility, source, meta, token_id, created_at, expires_at, deleted_at
 		FROM items WHERE id = ?`, itemID).Scan(&it.ID, &it.Kind, &it.Mime, &filename, &it.Ext, &it.Size, &it.SHA256, &title,
-		&width, &height, &it.Visibility, &source, &meta, &it.TokenID, &it.CreatedAt, &exp, &del)
+		&lang, &charset, &width, &height, &it.Visibility, &source, &meta, &it.TokenID, &it.CreatedAt, &exp, &del)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -79,6 +82,7 @@ func (s *Store) GetItem(ctx context.Context, itemID string) (*Item, error) {
 		return nil, err
 	}
 	it.Filename, it.Title, it.Source, it.Meta = filename.String, title.String, source.String, meta.String
+	it.Lang, it.Charset = lang.String, charset.String
 	if width.Valid && height.Valid {
 		w, h := int(width.Int64), int(height.Int64)
 		it.Width, it.Height = &w, &h
