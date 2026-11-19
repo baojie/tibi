@@ -21,9 +21,13 @@ between minor versions, but the public URL scheme is frozen from 0.0.1.
 - The server refuses a world-readable config file that contains S3 keys.
 - `docs/DEPLOY.md` (configuration, S3/B2 setup, delivery modes, migration).
 - CI runs the whole suite a second time against an S3-compatible server;
-  `scripts/test-s3.sh` does the same locally.
+  `scripts/test-s3.sh` does the same locally. Verified manually against a
+  real Backblaze B2 bucket.
 
 ### Fixed
+- Deleting a blob from a versioned bucket (Backblaze B2's default) removes
+  all of its versions; previously only a delete marker was added and the
+  bytes stayed stored and billed.
 - Expiry times are rounded up to the next second, so an item never expires
   before its requested lifetime (a `1s` expiry could previously last ~0s).
 

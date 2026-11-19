@@ -70,6 +70,15 @@ wrong endpoint, bucket or key shows up immediately.
 | Cloudflare R2 | `<account-id>.r2.cloudflarestorage.com` | `auto` | |
 | MinIO / versitygw / SeaweedFS | `http://host:port` | `us-east-1` | `use_path_style = true` |
 
+#### Versioned buckets (Backblaze B2 default)
+
+B2 buckets keep every version of an object by default, and AWS buckets may
+have versioning enabled. A plain S3 `DELETE` there only hides the object
+behind a delete marker, while the bytes stay stored and billed. tibi
+therefore deletes **every version** of a blob explicitly when GC removes it,
+so nothing is left behind. Setting the bucket's lifecycle to "Keep only the
+last version" is still a good belt-and-braces measure.
+
 #### Backblaze B2 step by step
 
 1. Create a **private** bucket (e.g. `tibi-blobs`). Note the S3 endpoint
@@ -80,6 +89,10 @@ wrong endpoint, bucket or key shows up immediately.
 3. Configure tibi as above and start it. A successful start means the probe
    passed.
 4. Upload a file and fetch its raw URL to confirm.
+
+Verified against a real B2 bucket (region `us-east-005`) for 0.0.5: the whole
+test suite passes with blobs in B2, `redirect` delivery serves presigned B2
+URLs (including `Range`), and delete + GC leave no object versions behind.
 
 ### Delivery: `proxy` or `redirect`
 
