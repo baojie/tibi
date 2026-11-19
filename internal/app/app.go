@@ -21,13 +21,14 @@ import (
 
 	"tibi/internal/blob"
 	"tibi/internal/config"
+	"tibi/internal/gc"
 	"tibi/internal/server"
 	"tibi/internal/store"
 	"tibi/internal/units"
 )
 
 // Version is set at build time via -ldflags "-X tibi/internal/app.Version=...".
-var Version = "0.0.3"
+var Version = "0.0.4"
 
 // Instance is an opened data directory.
 type Instance struct {
@@ -103,6 +104,7 @@ func Serve(args []string, stderr io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go gc.Loop(ctx, in.Store, in.Blobs, gc.Interval, log)
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	log.Info("listening", "addr", cfg.Listen, "base_url", cfg.BaseURL, "data_dir", cfg.DataDir)
@@ -124,10 +126,14 @@ const adminUsage = `usage:
   tibi admin token create --name N --scopes upload,delete,read_private [--quota 10GiB]
   tibi admin token list
   tibi admin token revoke N
+  tibi admin gc                 remove expired/deleted items and unused blobs now
 `
 
 // Admin implements `tibi admin`.
 func Admin(args []string, stdout, stderr io.Writer) error {
+	if len(args) >= 1 && args[0] == "gc" {
+		return adminGC(args[1:], stdout, stderr)
+	}
 	if len(args) < 2 || args[0] != "token" {
 		fmt.Fprint(stderr, adminUsage)
 		return errors.New("unknown admin command")
@@ -214,3 +220,27 @@ func Admin(args []string, stdout, stderr io.Writer) error {
 }
 
 func fmtTime(unix int64) string { return time.Unix(unix, 0).UTC().Format("2006-01-02 15:04Z") }
+
+func adminGC(args []string, stdout, stderr io.Writer) error {
+	fs := pflag.NewFlagSet("admin gc", pflag.ContinueOnError)
+	fs.SetOutput(stderr)
+	cfgPath := configFlag(fs)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := loadConfig(*cfgPath)
+	if err != nil {
+		return err
+	}
+	in, err := Open(cfg)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	res, err := gc.Run(context.Background(), in.Store, in.Blobs)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "removed %d items, %d blobs\n", res.Items, res.Blobs)
+	return nil
+}
