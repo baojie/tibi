@@ -103,3 +103,10 @@ func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
 }
 
 func nullStr(s string) sql.NullString { return sql.NullString{String: s, Valid: s != ""} }
+
+func nullInt(p *int) sql.NullInt64 {
+	if p == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*p), Valid: true}
+}
