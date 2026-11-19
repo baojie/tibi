@@ -14,8 +14,7 @@ import (
 )
 
 const (
-	rawCSP  = "default-src 'none'; sandbox"
-	viewCSP = "default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+	rawCSP = "default-src 'none'; sandbox"
 )
 
 // handleItemRoutes dispatches the frozen item URL scheme (PLAN A3).
@@ -170,8 +169,11 @@ type viewModel struct {
 	Title       string
 	Item        *store.Item
 	Size        string
+	URL         string
 	RawURL      string
+	EmbedURL    string
 	DownloadURL string
+	Markdown    string
 }
 
 func (s *Server) renderView(w http.ResponseWriter, it *store.Item) {
@@ -179,23 +181,41 @@ func (s *Server) renderView(w http.ResponseWriter, it *store.Item) {
 	if title == "" {
 		title = downloadName(it)
 	}
+	j := s.itemJSON(it)
 	vm := viewModel{
 		Title:       title,
 		Item:        it,
 		Size:        units.FormatBytes(it.Size),
+		URL:         j.URL,
 		RawURL:      s.cfg.RawBase() + "/" + it.ID + "/raw",
-		DownloadURL: s.cfg.RawBase() + "/" + it.ID + "/dl",
+		EmbedURL:    j.RawURL,
+		DownloadURL: j.DownloadURL,
+		Markdown:    j.Markdown,
+	}
+	page := "file"
+	if it.Kind == store.KindImage {
+		page = "image"
 	}
 	var buf bytes.Buffer
-	if err := s.pages["file"].ExecuteTemplate(&buf, "layout", vm); err != nil {
+	if err := s.pages[page].ExecuteTemplate(&buf, "layout", vm); err != nil {
 		s.log.Error("render", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", viewCSP)
+	h.Set("Content-Security-Policy", s.viewCSP())
 	h.Set("X-Frame-Options", "DENY")
 	h.Set("Cache-Control", "no-cache")
 	w.Write(buf.Bytes())
+}
+
+// viewCSP allows images and media from the raw origin when it differs.
+func (s *Server) viewCSP() string {
+	src := "'self'"
+	if raw := s.cfg.RawBaseURL; raw != "" && raw != s.cfg.BaseURL {
+		src += " " + raw
+	}
+	return "default-src 'self'; img-src " + src + " data:; media-src " + src +
+		"; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 }

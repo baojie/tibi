@@ -1,0 +1,21 @@
+{{define "content"}}
+<section class="item item-image">
+  <figure class="image">
+    <a href="{{.EmbedURL}}"><img src="{{.EmbedURL}}" alt="{{.Title}}"{{with .Item.Width}} width="{{.}}"{{end}}{{with .Item.Height}} height="{{.}}"{{end}}></a>
+  </figure>
+  <h1>{{.Title}}</h1>
+  <dl class="meta">
+    {{if .Item.Width}}<dt>Size</dt><dd>{{.Item.Width}} × {{.Item.Height}} · {{.Size}}</dd>{{else}}<dt>Size</dt><dd>{{.Size}}</dd>{{end}}
+    <dt>Type</dt><dd>{{.Item.Mime}}</dd>
+  </dl>
+  <div class="copy-rows">
+    <label>Link<input readonly value="{{.URL}}"></label><button type="button" class="button secondary" data-copy="{{.URL}}">Copy</button>
+    <label>Direct<input readonly value="{{.EmbedURL}}"></label><button type="button" class="button secondary" data-copy="{{.EmbedURL}}">Copy</button>
+    <label>Markdown<input readonly value="{{.Markdown}}"></label><button type="button" class="button secondary" data-copy="{{.Markdown}}">Copy</button>
+  </div>
+  <p class="actions">
+    <a class="button" href="{{.DownloadURL}}">Download</a>
+  </p>
+</section>
+<script src="/static/copy.js" defer></script>
+{{end}}

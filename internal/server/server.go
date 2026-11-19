@@ -21,13 +21,14 @@ import (
 
 // Server holds dependencies for the HTTP handlers.
 type Server struct {
-	cfg    config.Server
-	store  *store.Store
-	blobs  blob.Store
-	ingest *ingest.Pipeline
-	pages  map[string]*template.Template
-	log    *slog.Logger
-	mux    *http.ServeMux
+	cfg     config.Server
+	store   *store.Store
+	blobs   blob.Store
+	ingest  *ingest.Pipeline
+	pages   map[string]*template.Template
+	tempDir string
+	log     *slog.Logger
+	mux     *http.ServeMux
 }
 
 // New builds the HTTP handler.
@@ -36,7 +37,7 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		log = slog.Default()
 	}
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"file"} {
+	for _, name := range []string{"file", "image"} {
 		t, err := template.ParseFS(web.Templates, "templates/layout.html", "templates/"+name+".html")
 		if err != nil {
 			return nil, err
@@ -44,13 +45,14 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		pages[name] = t
 	}
 	s := &Server{
-		cfg:    cfg,
-		store:  st,
-		blobs:  bs,
-		ingest: &ingest.Pipeline{Store: st, Blobs: bs, TempDir: tempDir},
-		pages:  pages,
-		log:    log,
-		mux:    http.NewServeMux(),
+		cfg:     cfg,
+		store:   st,
+		blobs:   bs,
+		ingest:  &ingest.Pipeline{Store: st, Blobs: bs, TempDir: tempDir, StripImageMeta: cfg.StripImageMeta},
+		tempDir: tempDir,
+		pages:   pages,
+		log:     log,
+		mux:     http.NewServeMux(),
 	}
 	s.routes()
 	return s, nil
