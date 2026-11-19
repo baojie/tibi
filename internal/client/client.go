@@ -46,6 +46,9 @@ type Item struct {
 	DownloadURL string `json:"download_url"`
 	Mime        string `json:"mime"`
 	Size        int64  `json:"size"`
+	Width       *int   `json:"width,omitempty"`
+	Height      *int   `json:"height,omitempty"`
+	Markdown    string `json:"markdown"`
 	Filename    string `json:"filename,omitempty"`
 	Title       string `json:"title,omitempty"`
 	Visibility  string `json:"visibility"`
@@ -65,6 +68,8 @@ type UploadOptions struct {
 	Filename string
 	Title    string
 	Source   string
+	Kind     string
+	KeepMeta bool
 }
 
 func (c *Client) do(req *http.Request, out any) (json.RawMessage, error) {
@@ -118,6 +123,12 @@ func (c *Client) Upload(ctx context.Context, body io.Reader, size int64, o Uploa
 	}
 	if o.Source != "" {
 		q.Set("source", o.Source)
+	}
+	if o.Kind != "" {
+		q.Set("kind", o.Kind)
+	}
+	if o.KeepMeta {
+		q.Set("keep_meta", "1")
 	}
 	u := c.Server + "/api/v1/items"
 	if len(q) > 0 {

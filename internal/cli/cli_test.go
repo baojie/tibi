@@ -155,3 +155,10 @@ func TestEnvOverridesAndErrors(t *testing.T) {
 		t.Fatalf("missing file: %+v", r)
 	}
 }
+
+func writeFile(t *testing.T, p string, b []byte) {
+	t.Helper()
+	if err := os.WriteFile(p, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

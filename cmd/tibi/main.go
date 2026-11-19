@@ -26,10 +26,11 @@ func main() {
 		}
 	}
 	a := &cli.App{
-		Stdin:      os.Stdin,
-		Stdout:     os.Stdout,
-		Stderr:     os.Stderr,
-		StdinIsTTY: term.IsTerminal(int(os.Stdin.Fd())),
+		Stdin:       os.Stdin,
+		Stdout:      os.Stdout,
+		Stderr:      os.Stderr,
+		StdinIsTTY:  term.IsTerminal(int(os.Stdin.Fd())),
+		StdoutIsTTY: term.IsTerminal(int(os.Stdout.Fd())),
 		ReadSecret: func() (string, error) {
 			b, err := term.ReadPassword(int(os.Stdin.Fd()))
 			return string(b), err
