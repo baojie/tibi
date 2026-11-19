@@ -57,12 +57,14 @@ usage:
   tibi up -                        upload stdin
   <cmd> | tibi                     upload stdin
   tibi clip                        upload the clipboard (image preferred, else text)
+  tibi paste [-l LANG] [-t TITLE]  paste text from stdin, or write it in $EDITOR
   tibi serve [--config PATH]       run the server
   tibi admin ...                   manage the server (tokens)
 
 upload flags:
   -n, --name NAME    filename for stdin uploads
   -t, --title TITLE  title
+  -l, --lang LANG    language for syntax highlighting (default: inferred)
       --md           print Markdown (image embed or link) instead of the URL
       --raw          print the direct/raw URL instead of the page URL
       --keep-meta    keep image metadata (EXIF/GPS is stripped by default)
@@ -87,6 +89,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		err = a.up(ctx, args[1:])
 	case "clip":
 		err = a.clip(ctx, args[1:])
+	case "paste":
+		err = a.paste(ctx, args[1:])
 	case "help", "-h", "--help":
 		fmt.Fprint(a.Stdout, Usage)
 		return 0
@@ -214,7 +218,7 @@ func (a *App) login(ctx context.Context, args []string) error {
 
 // outFlags are the flags shared by upload commands.
 type outFlags struct {
-	name, title          string
+	name, title, lang    string
 	md, raw, json, nocpy bool
 	keepMeta             bool
 }
@@ -224,6 +228,7 @@ func (a *App) uploadFlags(name string) (*pflag.FlagSet, *outFlags) {
 	o := &outFlags{}
 	fs.StringVarP(&o.name, "name", "n", "", "filename for stdin")
 	fs.StringVarP(&o.title, "title", "t", "", "title")
+	fs.StringVarP(&o.lang, "lang", "l", "", "language for highlighting")
 	fs.BoolVar(&o.md, "md", false, "print Markdown")
 	fs.BoolVar(&o.raw, "raw", false, "print the raw URL")
 	fs.BoolVar(&o.json, "json", false, "print full API response")
@@ -353,7 +358,7 @@ func (a *App) clip(ctx context.Context, args []string) error {
 }
 
 func (a *App) uploadOptions(o *outFlags) client.UploadOptions {
-	return client.UploadOptions{Filename: o.name, Title: o.title, Source: "cli", KeepMeta: o.keepMeta}
+	return client.UploadOptions{Filename: o.name, Title: o.title, Lang: o.lang, Source: "cli", KeepMeta: o.keepMeta}
 }
 
 func displayName(f string) string {

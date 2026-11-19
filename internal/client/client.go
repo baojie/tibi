@@ -51,6 +51,8 @@ type Item struct {
 	Markdown    string `json:"markdown"`
 	Filename    string `json:"filename,omitempty"`
 	Title       string `json:"title,omitempty"`
+	Lang        string `json:"lang,omitempty"`
+	Charset     string `json:"charset,omitempty"`
 	Visibility  string `json:"visibility"`
 	ExpiresAt   *int64 `json:"expires_at"`
 	CreatedAt   int64  `json:"created_at"`
@@ -69,6 +71,7 @@ type UploadOptions struct {
 	Title    string
 	Source   string
 	Kind     string
+	Lang     string
 	KeepMeta bool
 }
 
@@ -126,6 +129,9 @@ func (c *Client) Upload(ctx context.Context, body io.Reader, size int64, o Uploa
 	}
 	if o.Kind != "" {
 		q.Set("kind", o.Kind)
+	}
+	if o.Lang != "" {
+		q.Set("lang", o.Lang)
 	}
 	if o.KeepMeta {
 		q.Set("keep_meta", "1")
