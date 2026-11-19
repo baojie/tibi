@@ -22,3 +22,14 @@ jobs:
         run: go build ./...
       - name: test
         run: go test -race -count=1 ./...
+  test-s3:
+    # The whole suite again, with blobs in an S3-compatible store
+    # (versitygw: an S3 gateway over a local directory).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: test on S3
+        run: scripts/test-s3.sh -race ./...

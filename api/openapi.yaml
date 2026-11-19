@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.4
+  version: 0.0.5
   description: |
     Self-hosted image host + pastebin. Upload anything, get back a URL.
     This file is the source of truth for /api/v1.

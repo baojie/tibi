@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.5] — Object storage: S3 / Backblaze B2
+
+### Added
+- `s3` blob backend for any S3-compatible store (AWS S3, Backblaze B2,
+  Cloudflare R2, MinIO, …) via minio-go: private objects with type and
+  immutable caching headers, seekable reads for `Range`.
+- Startup probe (write, read, delete) that fails fast on misconfiguration.
+- `blob_delivery = "redirect"`: 302 to one-hour presigned URLs for passive
+  media and downloads; text, active types, private and burn-after-read items
+  stay proxied.
+- `tibi admin blobs migrate --to s3|fs`: verified, idempotent, resumable copy
+  of all referenced blobs; raw URLs are unchanged.
+- `tibi admin gc --orphans`: deletes stored blobs no item references (older
+  than an hour).
+- The server refuses a world-readable config file that contains S3 keys.
+- `docs/DEPLOY.md` (configuration, S3/B2 setup, delivery modes, migration).
+- CI runs the whole suite a second time against an S3-compatible server;
+  `scripts/test-s3.sh` does the same locally.
+
+### Fixed
+- Expiry times are rounded up to the next second, so an item never expires
+  before its requested lifetime (a `1s` expiry could previously last ~0s).
+
 ## [0.0.4] — Item management and lifecycle
 
 ### Added

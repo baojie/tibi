@@ -34,3 +34,6 @@ curl -H "Authorization: Bearer $TOKEN" --data-binary @file.bin \
 | `/{id}/dl` | download |
 
 The API contract is `api/openapi.yaml`, also served at `/api/v1/openapi.yaml`.
+
+Deployment, storage backends (local disk, S3, Backblaze B2) and migration:
+`docs/DEPLOY.md`.
