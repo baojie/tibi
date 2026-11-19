@@ -91,11 +91,13 @@ func status(t *testing.T, url, tok string) int {
 func TestExpiryAndGC(t *testing.T) {
 	e := testutil.New(t, nil)
 	tok := e.Token("t")
-	it := up(t, e, tok, "?expires=1s", []byte("short-lived"))
+	// 10s rather than 1s: against a real object store (e.g. B2) an upload
+	// plus the "before expiry" checks can take over a second.
+	it := up(t, e, tok, "?expires=10s", []byte("short-lived"))
 	if it.ExpiresAt == nil {
 		t.Fatal("expires_at not set")
 	}
-	keep := up(t, e, tok, "?expires=1s", []byte("expiring but shared"))
+	keep := up(t, e, tok, "?expires=10s", []byte("expiring but shared"))
 	up(t, e, tok, "", []byte("expiring but shared")) // same blob, permanent
 
 	for _, u := range []string{it.URL, it.RawURL, it.DownloadURL} {
@@ -108,7 +110,7 @@ func TestExpiryAndGC(t *testing.T) {
 	}
 	blobs := e.BlobCount()
 
-	e.Advance(2 * time.Second)
+	e.Advance(12 * time.Second)
 	for _, u := range []string{it.URL, it.RawURL, it.DownloadURL, keep.URL} {
 		if status(t, u, "") != 404 {
 			t.Fatalf("%s served after expiry", u)
