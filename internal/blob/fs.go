@@ -102,7 +102,7 @@ func (s *FS) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 // List calls fn for every key starting with prefix.
-func (s *FS) List(ctx context.Context, prefix string, fn func(key string) error) error {
+func (s *FS) List(ctx context.Context, prefix string, fn func(Info) error) error {
 	return filepath.WalkDir(s.root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -115,10 +115,14 @@ func (s *FS) List(ctx context.Context, prefix string, fn func(key string) error)
 			return err
 		}
 		key := filepath.ToSlash(rel)
-		if strings.HasPrefix(key, prefix) {
-			return fn(key)
+		if !strings.HasPrefix(key, prefix) {
+			return nil
 		}
-		return nil
+		fi, err := d.Info()
+		if err != nil {
+			return err
+		}
+		return fn(Info{Key: key, Size: fi.Size(), ModTime: fi.ModTime()})
 	})
 }
 

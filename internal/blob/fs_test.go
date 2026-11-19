@@ -36,7 +36,7 @@ func TestFS(t *testing.T) {
 		t.Fatalf("got %q", b)
 	}
 	var keys []string
-	s.List(ctx, "", func(k string) error { keys = append(keys, k); return nil })
+	s.List(ctx, "", func(i Info) error { keys = append(keys, i.Key); return nil })
 	if len(keys) != 1 || keys[0] != key {
 		t.Fatalf("list = %v", keys)
 	}

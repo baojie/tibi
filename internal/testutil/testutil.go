@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"tibi/internal/blob"
 	"time"
 
 	"tibi/internal/app"
@@ -16,6 +17,7 @@ import (
 	"tibi/internal/gc"
 	"tibi/internal/server"
 	"tibi/internal/store"
+	"tibi/internal/testutil/s3test"
 )
 
 // Env is a running test server.
@@ -43,7 +45,7 @@ func (e *Env) GC() gc.Result {
 // BlobCount counts stored blobs.
 func (e *Env) BlobCount() int {
 	n := 0
-	e.Instance.Blobs.List(context.Background(), "", func(string) error { n++; return nil })
+	e.Instance.Blobs.List(context.Background(), "", func(blob.Info) error { n++; return nil })
 	return n
 }
 
@@ -54,6 +56,11 @@ func New(t *testing.T, mod func(*config.Server)) *Env {
 	cfg.DataDir = filepath.Join(t.TempDir(), "data")
 	srv := httptest.NewUnstartedServer(nil)
 	cfg.BaseURL = "http://" + srv.Listener.Addr().String()
+	if s3test.Enabled() {
+		// The whole suite runs on S3 when it is configured (PLAN 0.0.5).
+		UseS3(t, &cfg)
+	}
+	t.Logf("blob backend: %s", cfg.Storage.Backend)
 	if mod != nil {
 		mod(&cfg)
 	}
@@ -79,6 +86,20 @@ func New(t *testing.T, mod func(*config.Server)) *Env {
 	e.Srv = srv
 	return e
 }
+
+// UseS3 points cfg at the test S3 bucket under a fresh prefix (skipping the
+// test if S3 is not configured).
+func UseS3(t testing.TB, cfg *config.Server) {
+	sc := s3test.Config(t)
+	cfg.Storage.Backend = "s3"
+	cfg.Storage.S3 = config.S3{
+		Endpoint: sc.Endpoint, Region: sc.Region, Bucket: sc.Bucket, Prefix: sc.Prefix,
+		AccessKey: sc.AccessKey, SecretKey: sc.SecretKey, UsePathStyle: sc.UsePathStyle,
+	}
+}
+
+// Backend names the blob backend in use, for test logs.
+func (e *Env) Backend() string { return e.Cfg.Storage.Backend }
 
 // Token creates a token with the given scopes and returns its secret.
 func (e *Env) Token(name string, scopes ...string) string {
