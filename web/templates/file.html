@@ -1,0 +1,14 @@
+{{define "content"}}
+<section class="item item-file">
+  <h1>{{.Title}}</h1>
+  <dl class="meta">
+    {{with .Item.Filename}}<dt>File</dt><dd>{{.}}</dd>{{end}}
+    <dt>Size</dt><dd>{{.Size}}</dd>
+    <dt>Type</dt><dd>{{.Item.Mime}}</dd>
+  </dl>
+  <p class="actions">
+    <a class="button" href="{{.DownloadURL}}">Download</a>
+    <a class="button secondary" href="{{.RawURL}}" rel="nofollow">Raw</a>
+  </p>
+</section>
+{{end}}
