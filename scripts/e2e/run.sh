@@ -21,7 +21,8 @@ text=$(printf 'package main\n\nfunc main() { println("secret") }\n' | "$work/tib
 pw=$(printf 'protected with a password\n' | TIBI_E2E_PASSWORD=open-sesame "$work/tibi" paste --encrypt --password --no-copy)
 printf 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAEUlEQVR42mP8z8DwnxEImAQAG/0C/xTPyMEAAAAASUVORK5CYII=' | base64 -d > "$work/pixel.png"
 img=$("$work/tibi" up --encrypt --no-copy "$work/pixel.png")
-node scripts/e2e/decrypt.mjs "$text" "$pw" open-sesame "$img" "$chrome"
+burn=$(printf 'read once\n' | "$work/tibi" paste --encrypt --burn --no-copy)
+node scripts/e2e/decrypt.mjs "$text" "$pw" open-sesame "$img" "$burn" "$chrome"
 
 # The Chrome extension (starts its own servers, CORS limited to its origin).
 node scripts/e2e/extension.mjs "$work/tibi" "$chrome"

@@ -15,6 +15,15 @@
   function fail(msg) {
     status.textContent = msg;
     status.className = "notice error";
+    status.hidden = false;
+  }
+
+  // What the page shows inline. The type comes from the (attacker-chosen)
+  // header, so only plain raster images and media are displayed; anything
+  // else is text or a download. blob: documents share this origin.
+  var INLINE = /^(image\/(png|jpeg|gif|webp|avif|bmp)|video\/(mp4|webm|ogg|quicktime)|audio\/(mpeg|ogg|opus|mp4|wav|wave|flac|aac|webm))$/;
+  function cleanType(t) {
+    return String(t || "").split(";")[0].trim().toLowerCase();
   }
   function b64url(s) {
     s = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -52,8 +61,11 @@
     if (blob.length < 2 || blob[0] !== 1 || (blob[1] & ~1) !== 0) throw "format";
     var n = 2, salt = null, iter = 0;
     if (blob[1] & 1) {
+      if (blob.length < 22) throw "format";
       salt = blob.slice(2, 18);
       iter = new DataView(blob.buffer, blob.byteOffset + 18, 4).getUint32(0);
+      // Same bounds as internal/e2e: a crafted count would freeze the tab.
+      if (iter < 1 || iter > 10000000) throw "format";
       n = 22;
     }
     if (blob.length < n + 12 + 16) throw "format";
@@ -66,8 +78,14 @@
     } catch (e) {
       throw "key";
     }
+    if (plain.length < 4) throw "format";
     var hl = new DataView(plain.buffer).getUint32(0);
-    var header = JSON.parse(new TextDecoder().decode(plain.slice(4, 4 + hl)));
+    if (hl > plain.length - 4) throw "format";
+    var raw;
+    try { raw = JSON.parse(new TextDecoder().decode(plain.slice(4, 4 + hl))); } catch (e) { throw "format"; }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw "format";
+    var str = function (v) { return typeof v === "string" ? v : ""; };
+    var header = { name: str(raw.name), type: str(raw.type), lang: str(raw.lang) };
     return { header: header, content: plain.slice(4 + hl) };
   }
 
@@ -75,7 +93,9 @@
     var a = document.createElement("a");
     a.className = "button";
     a.textContent = t("e2e.download");
-    a.href = URL.createObjectURL(new Blob([content], { type: header.type || "application/octet-stream" }));
+    // Always octet-stream: the download attribute names the file, and a
+    // blob: URL with an HTML or SVG type would open as a document here.
+    a.href = URL.createObjectURL(new Blob([content], { type: "application/octet-stream" }));
     a.download = header.name || "decrypted";
     return a;
   }
@@ -84,18 +104,19 @@
     var h = res.header, c = res.content;
     status.hidden = true;
     if (h.name) document.getElementById("e2e-name").textContent = h.name;
-    var type = h.type || "";
+    var type = cleanType(h.type);
+    var inline = INLINE.test(type);
     var text = null;
-    if (!/^(image|video|audio)\//.test(type)) {
+    if (!inline) {
       try { text = new TextDecoder("utf-8", { fatal: true }).decode(c); } catch (e) { text = null; }
       if (text !== null && text.indexOf("\0") >= 0) text = null;
     }
-    if (/^image\//.test(type) && type !== "image/svg+xml") {
+    if (inline && type.indexOf("image/") === 0) {
       var img = document.createElement("img");
       img.src = URL.createObjectURL(new Blob([c], { type: type }));
       img.alt = h.name || "";
       out.appendChild(img);
-    } else if (/^(video|audio)\//.test(type)) {
+    } else if (inline) {
       var m = document.createElement(type[0] === "v" ? "video" : "audio");
       m.controls = true;
       m.className = "player";
@@ -125,8 +146,6 @@
   }
 
   async function load() {
-    var embedded = box.getAttribute("data-ciphertext");
-    if (embedded) return b64url(embedded.replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_"));
     var r = await fetch(box.getAttribute("data-raw"));
     if (!r.ok) throw "fetch";
     return new Uint8Array(await r.arrayBuffer());

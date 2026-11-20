@@ -75,7 +75,7 @@ const openTab = async (url) => {
 const port = () => 18200 + Math.floor(Math.random() * 700);
 async function startTibi(name, cors) {
   const p = port();
-  const env = { ...process.env, TIBI_DATA_DIR: join(work, name), TIBI_LISTEN: `127.0.0.1:${p}`, TIBI_BASE_URL: `http://127.0.0.1:${p}`, TIBI_CORS_ORIGINS: cors };
+  const env = { ...process.env, TIBI_DATA_DIR: join(work, name), TIBI_LISTEN: `127.0.0.1:${p}`, TIBI_BASE_URL: `http://127.0.0.1:${p}`, TIBI_CORS_ORIGINS: cors, TIBI_METRICS_ALLOW_LOCAL: "true" };
   const token = execFileSync(tibi, ["admin", "token", "create", "--name", "chrome", "--scopes", "upload", "--config", ""], { env }).toString().trim();
   const srv = spawn(tibi, ["serve", "--config", ""], { env, stdio: "ignore" });
   procs.push(srv);

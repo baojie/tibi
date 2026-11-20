@@ -1,13 +1,14 @@
 // End-to-end encryption in a real browser: links with #k= decrypt; missing
 // or wrong keys and wrong passwords show clear errors.
 //
-//   node scripts/e2e/decrypt.mjs TEXT_URL PASSWORD_URL PASSWORD IMAGE_URL [chrome]
+//   node scripts/e2e/decrypt.mjs TEXT_URL PASSWORD_URL PASSWORD IMAGE_URL BURN_URL [chrome]
 // TEXT_URL holds Go code ("package main" …), IMAGE_URL a 2×1 PNG; all URLs
-// include their #k= fragment.
+// include their #k= fragment. BURN_URL is burn-after-read text containing
+// "read once".
 import { launch } from "./cdp.mjs";
 
-const [textURL, pwURL, password, imageURL, chromePath] = process.argv.slice(2);
-if (!imageURL) { console.error("usage: decrypt.mjs TEXT_URL PASSWORD_URL PASSWORD IMAGE_URL [CHROME]"); process.exit(2); }
+const [textURL, pwURL, password, imageURL, burnURL, chromePath] = process.argv.slice(2);
+if (!burnURL) { console.error("usage: decrypt.mjs TEXT_URL PASSWORD_URL PASSWORD IMAGE_URL BURN_URL [CHROME]"); process.exit(2); }
 const b = await launch(chromePath);
 setTimeout(() => { console.error("FAIL: timed out"); b.close(); process.exit(1); }, 90000).unref();
 const fail = (msg) => { console.error("FAIL:", msg); b.close(); process.exit(1); };
@@ -15,6 +16,9 @@ const status = () => b.evaluate(`(() => { const s = document.getElementById("e2e
 const load = async (url) => { await b.navigate("about:blank"); await b.navigate(url); };
 
 try {
+  // Record the type of every blob the page turns into a URL.
+  await b.send("Page.addScriptToEvaluateOnNewDocument", { source:
+    "window.__blobTypes = []; const o = URL.createObjectURL; URL.createObjectURL = function (x) { window.__blobTypes.push(x.type); return o.call(URL, x); };" });
   // Pin the language: headless Chrome sends the machine's locale otherwise.
   await b.send("Network.setExtraHTTPHeaders", { headers: { "Accept-Language": "en-US" } });
 
@@ -59,6 +63,21 @@ try {
   const dl = await b.evaluate(`(() => { const a = document.querySelector("#e2e-actions a"); return a ? a.download : ""; })()`);
   if (dl !== "pixel.png") fail("download name: " + dl);
   console.log("OK: image decrypted (" + img + "), download as", dl);
+  // The blob types the page created (recorded by the hook installed below):
+  // the image is shown as image/png, the download is octet-stream.
+  const types = await b.evaluate("JSON.stringify(window.__blobTypes || [])");
+  if (types !== JSON.stringify(["image/png", "application/octet-stream"])) fail("blob types: " + types);
+
+  // 6. Burn after reading: the reveal keeps the key (#k=) and decrypts;
+  // afterwards the link is dead.
+  await load(burnURL);
+  await b.waitFor(`!!document.getElementById("burn-form")`, "burn notice");
+  await b.evaluate(`document.getElementById("burn-form").requestSubmit()`);
+  await b.waitFor(`(() => { const c = document.querySelector("#e2e-content code"); return c && c.textContent.includes("read once"); })()`, "burned item decrypted");
+  if (!(await b.evaluate("location.hash")).startsWith("#k=")) fail("key lost on reveal");
+  console.log("OK: burn-after-read encrypted item revealed and decrypted");
+  const gone = await b.evaluate(`fetch(${JSON.stringify(burnURL.split("#")[0])}).then((r) => r.status)`);
+  if (gone !== 404) fail("burned item still there: " + gone);
   b.close();
   process.exit(0);
 } catch (e) {

@@ -20,7 +20,7 @@ fail() { echo "FAIL: $*" >&2; $ADB logcat -d -s tibi:* WM-WorkerWrapper:* | tail
 # --- server ---
 go build -o "$work/tibi" ./cmd/tibi
 port=$((18300 + RANDOM % 500))
-export TIBI_DATA_DIR="$work/data" TIBI_LISTEN=127.0.0.1:$port TIBI_BASE_URL=http://10.0.2.2:$port
+export TIBI_DATA_DIR="$work/data" TIBI_LISTEN=127.0.0.1:$port TIBI_BASE_URL=http://10.0.2.2:$port TIBI_METRICS_ALLOW_LOCAL=true
 token=$("$work/tibi" admin token create --name android --scopes upload --config "" 2>/dev/null)
 "$work/tibi" serve --config "" 2>"$work/serve.log" &
 pid=$!
