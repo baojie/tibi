@@ -30,6 +30,45 @@ jobs:
         run: |
           go test -count=1 -v -run TestHEICRealConverter ./internal/server/ | tee heic.log
           grep -q -- "--- PASS: TestHEICRealConverter" heic.log
+  android:
+    # Build the app, then run the acceptance script on an emulator: share
+    # one photo, five photos, airplane mode mid-upload, HEIC, QS tile.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: tools for the test fixtures
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends imagemagick libheif-examples libheif-plugin-x265 libheif-plugin-libde265
+      - name: SDK platform
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
+      - name: build
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+      - name: enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: emulator acceptance test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          script: android/scripts/emulator-test.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tibi-android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
   test-s3:
     # The whole suite again, with blobs in an S3-compatible store
     # (versitygw: an S3 gateway over a local directory).
