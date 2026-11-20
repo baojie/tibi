@@ -36,7 +36,7 @@ func TestParseExpiry(t *testing.T) {
 			t.Errorf("ParseExpiry(%q) not never", in)
 		}
 	}
-	for _, in := range []string{"soon", "-1h", "0d", "1x"} {
+	for _, in := range []string{"soon", "-1h", "0d", "1x", "1e300d", "infd", "nand", "101y", "1000000h"} {
 		if _, _, err := ParseExpiry(in); err == nil {
 			t.Errorf("ParseExpiry(%q) accepted", in)
 		}

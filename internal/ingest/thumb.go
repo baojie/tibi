@@ -18,14 +18,16 @@ const ThumbWidth = 400
 // pixels would take more memory than this get no thumbnail (they are still
 // stored and served). A tiny PNG can claim 10000×10000 at 16 bits per
 // channel, which decodes to 800 MB; counting bytes, not pixels, catches it.
-const maxThumbBytes = 256 << 20
+// The limit admits a 48-megapixel phone JPEG (3 bytes per pixel) but not
+// an RGBA image beyond ~40 MP.
+const maxThumbBytes = 160 << 20
 
 // thumbSlots bounds how many images are decoded at once, so parallel
 // uploads cannot multiply that memory.
-var thumbSlots = make(chan struct{}, 2)
+var thumbSlots = make(chan struct{}, 1)
 
 // decodedBytes estimates the memory image.Decode needs for an image.
-func decodedBytes(cfg image.Config) int64 {
+func decodedBytes(cfg image.Config, progressiveJPEG bool) int64 {
 	bpp := int64(4)
 	switch cfg.ColorModel {
 	case color.RGBA64Model, color.NRGBA64Model:
@@ -34,8 +36,35 @@ func decodedBytes(cfg image.Config) int64 {
 		bpp = 2
 	case color.GrayModel, color.AlphaModel:
 		bpp = 1
+	case color.YCbCrModel, color.CMYKModel:
+		bpp = 3
+	}
+	if progressiveJPEG {
+		bpp += 8 // Go keeps every coefficient as int32: 4 B/px/component, chroma usually subsampled
 	}
 	return int64(cfg.Width) * int64(cfg.Height) * bpp
+}
+
+// isProgressiveJPEG reports whether a JPEG uses progressive coding (an SOF2
+// marker before the first scan).
+func isProgressiveJPEG(b []byte) bool {
+	for i := 2; i+3 < len(b); {
+		if b[i] != 0xFF {
+			return false
+		}
+		m := b[i+1]
+		switch {
+		case m == 0xC2:
+			return true
+		case m == 0xDA: // start of scan: no SOF2 before it
+			return false
+		case m == 0xFF:
+			i++
+			continue
+		}
+		i += 2 + int(b[i+2])<<8 | int(b[i+3])
+	}
+	return false
 }
 
 // errNoThumb means no thumbnail can be made for this image type.
@@ -53,7 +82,7 @@ func MakeThumb(data []byte, mt string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Width <= 0 || cfg.Height <= 0 || decodedBytes(cfg) > maxThumbBytes {
+	if cfg.Width <= 0 || cfg.Height <= 0 || decodedBytes(cfg, mt == "image/jpeg" && isProgressiveJPEG(data)) > maxThumbBytes {
 		return nil, errNoThumb
 	}
 	thumbSlots <- struct{}{}

@@ -320,30 +320,35 @@ func snippet(body, query string) string {
 	return ""
 }
 
-// indexFold is strings.Index under Unicode case folding, returning a byte
-// offset into s.
+// snippetScan bounds how much of a body is searched for the snippet.
+const snippetScan = 1 << 20
+
+// indexFold is a case-insensitive strings.Index returning a byte offset
+// into s. It lowers s rune by rune while remembering where each lowered
+// byte came from — lower-casing can change byte lengths (Ⱥ is 2 bytes, ⱥ
+// is 3) — and lets strings.Index do the search: linear in s and sub, where
+// a scan comparing at every offset (or a case-folding regexp) multiplies
+// the two, and a long query word over a large paste took seconds of CPU.
 func indexFold(s, sub string) int {
 	if sub == "" {
 		return 0
 	}
-	for i := range s {
-		if hasPrefixFold(s[i:], sub) {
-			return i
+	if len(s) > snippetScan {
+		s = s[:snippetScan]
+	}
+	var low strings.Builder
+	low.Grow(len(s))
+	from := make([]int32, 0, len(s))
+	for i, r := range s {
+		n := low.Len()
+		low.WriteRune(unicode.ToLower(r))
+		for range low.Len() - n {
+			from = append(from, int32(i))
 		}
 	}
-	return -1
-}
-
-func hasPrefixFold(s, prefix string) bool {
-	for _, pr := range prefix {
-		if s == "" {
-			return false
-		}
-		r, n := utf8.DecodeRuneInString(s)
-		if r != pr && unicode.ToLower(r) != unicode.ToLower(pr) && unicode.ToUpper(r) != unicode.ToUpper(pr) {
-			return false
-		}
-		s = s[n:]
+	j := strings.Index(low.String(), strings.ToLower(sub))
+	if j < 0 {
+		return -1
 	}
-	return true
+	return int(from[j])
 }

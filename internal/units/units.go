@@ -51,6 +51,10 @@ func FormatBytes(n int64) string {
 
 // ParseExpiry parses an expiry such as "10m", "1h", "7d", "2w", "30d" or
 // "never". never is true for "never" (and ""); d is then zero.
+// MaxExpiry bounds expiries: larger values overflowed into timestamps in
+// the past (1e300d became 1734 BC).
+const MaxExpiry = 100 * 365 * 24 * time.Hour
+
 func ParseExpiry(s string) (d time.Duration, never bool, err error) {
 	t := strings.ToLower(strings.TrimSpace(s))
 	if t == "" || t == "never" || t == "0" {
@@ -67,14 +71,14 @@ func ParseExpiry(s string) (d time.Duration, never bool, err error) {
 	}
 	if mult != 0 {
 		n, err := strconv.ParseFloat(t, 64)
-		if err != nil || n <= 0 {
-			return 0, false, fmt.Errorf("invalid expiry %q (examples: 10m, 1h, 7d, never)", s)
+		if err != nil || !(n > 0) || n*float64(mult) > float64(MaxExpiry) { // !(n > 0) also catches NaN
+			return 0, false, fmt.Errorf("invalid expiry %q (examples: 10m, 1h, 7d, never; at most 100y)", s)
 		}
 		return time.Duration(n * float64(mult)), false, nil
 	}
 	d, err = time.ParseDuration(t)
-	if err != nil || d <= 0 {
-		return 0, false, fmt.Errorf("invalid expiry %q (examples: 10m, 1h, 7d, never)", s)
+	if err != nil || d <= 0 || d > MaxExpiry {
+		return 0, false, fmt.Errorf("invalid expiry %q (examples: 10m, 1h, 7d, never; at most 100y)", s)
 	}
 	return d, false, nil
 }

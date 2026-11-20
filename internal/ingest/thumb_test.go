@@ -6,6 +6,7 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
 	"runtime"
 	"testing"
@@ -31,8 +32,36 @@ func TestThumbDecompressionBomb(t *testing.T) {
 		t.Fatalf("allocated %d MB for a refused image", grew>>20)
 	}
 	// An 8-bit image of the same pixel count is refused too (400 MB).
-	cfg := image.Config{ColorModel: color.NRGBAModel, Width: 10000, Height: 10000}
-	if decodedBytes(cfg) <= maxThumbBytes {
-		t.Fatal("100 MP RGBA under the limit")
+	for _, c := range []struct {
+		model       color.Model
+		w, h        int
+		progressive bool
+		ok          bool
+	}{
+		{color.NRGBAModel, 7999, 7999, false, false}, // the reviewer's 64 MP RGBA bomb
+		{color.YCbCrModel, 8064, 6048, false, true},  // a 48 MP phone JPEG
+		{color.YCbCrModel, 8064, 6048, true, false},  // …progressive: coefficients too
+		{color.YCbCrModel, 4032, 3024, true, true},   // a 12 MP progressive JPEG
+		{color.NRGBAModel, 4000, 3000, false, true},  // a 12 MP PNG
+	} {
+		got := decodedBytes(image.Config{ColorModel: c.model, Width: c.w, Height: c.h}, c.progressive) <= maxThumbBytes
+		if got != c.ok {
+			t.Errorf("%dx%d progressive=%v: thumbnail allowed %v, want %v", c.w, c.h, c.progressive, got, c.ok)
+		}
+	}
+}
+
+func TestIsProgressiveJPEG(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	var buf bytes.Buffer
+	jpeg.Encode(&buf, img, nil) // Go writes baseline
+	if isProgressiveJPEG(buf.Bytes()) {
+		t.Fatal("baseline JPEG taken for progressive")
+	}
+	if !isProgressiveJPEG([]byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0x00, 0x00, 0xFF, 0xC2, 0x00, 0x04, 0, 0}) {
+		t.Fatal("SOF2 not detected")
+	}
+	if isProgressiveJPEG([]byte{0xFF, 0xD8, 0xFF}) {
+		t.Fatal("truncated input")
 	}
 }
