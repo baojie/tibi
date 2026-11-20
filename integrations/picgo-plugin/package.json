@@ -1,0 +1,11 @@
+{
+  "name": "picgo-plugin-tibi",
+  "version": "0.0.11",
+  "description": "PicGo / PicList uploader for tibi, a self-hosted image host and pastebin",
+  "main": "index.js",
+  "keywords": ["picgo", "picgo-gui-plugin", "picgo-plugin", "piclist", "tibi", "image-host"],
+  "files": ["index.js", "README.md"],
+  "license": "UNLICENSED",
+  "engines": { "picgo": "^1.4.0" },
+  "scripts": { "test": "node test.mjs" }
+}

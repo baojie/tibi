@@ -1,0 +1,22 @@
+#!/bin/sh
+# Take a screenshot with Flameshot, upload it to tibi, and copy the link.
+# Bind it to a key (e.g. PrintScreen) in your desktop's shortcut settings.
+#
+# Needs: flameshot, the tibi CLI logged in (`tibi login`), and optionally
+# notify-send. Pass tibi flags through, e.g. `tibi-shot --md` or `-e 7d`.
+set -eu
+tmp=$(mktemp --suffix=.png)
+trap 'rm -f "$tmp"' EXIT
+flameshot gui --raw > "$tmp"
+[ -s "$tmp" ] || exit 0        # cancelled
+url=$(tibi up --no-copy -n "screenshot-$(date +%Y%m%d-%H%M%S).png" "$@" - < "$tmp")
+# Copy the link (tibi copies only when stdout is a terminal).
+if command -v wl-copy >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    printf %s "$url" | wl-copy
+elif command -v xclip >/dev/null 2>&1; then
+    printf %s "$url" | xclip -selection clipboard
+fi
+if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a tibi "Screenshot uploaded" "$url"
+fi
+echo "$url"

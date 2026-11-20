@@ -1,0 +1,18 @@
+{
+  "Version": "17.0.0",
+  "Name": "tibi",
+  "DestinationType": "ImageUploader, TextUploader, FileUploader",
+  "RequestMethod": "POST",
+  "RequestURL": "https://tibi.example.com/api/v1/items",
+  "Headers": {
+    "Authorization": "Bearer tibi_REPLACE_WITH_YOUR_TOKEN"
+  },
+  "Body": "MultipartFormData",
+  "Arguments": {
+    "source": "sharex"
+  },
+  "FileFormName": "file",
+  "URL": "{json:raw_url}",
+  "ThumbnailURL": "{json:thumbnail_url}",
+  "ErrorMessage": "{json:error.message}"
+}
