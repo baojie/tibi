@@ -30,7 +30,7 @@ func (a *App) paste(ctx context.Context, args []string) error {
 	}
 	var text []byte
 	if a.StdinIsTTY {
-		text, err = a.editText(o.name)
+		text, err = a.editText(o.name, nil)
 	} else {
 		text, err = io.ReadAll(io.LimitReader(a.Stdin, maxPasteBytes))
 	}
@@ -65,8 +65,9 @@ func (a *App) editor() string {
 	return "vi"
 }
 
-// editText opens $EDITOR on an empty temp file and returns what was saved.
-func (a *App) editText(name string) ([]byte, error) {
+// editText opens $EDITOR on a temp file holding initial and returns what
+// was saved.
+func (a *App) editText(name string, initial []byte) ([]byte, error) {
 	pattern := "tibi-paste-*.txt"
 	if ext := filepath.Ext(name); ext != "" && !strings.ContainsAny(ext, "*/\\") {
 		pattern = "tibi-paste-*" + ext
@@ -76,7 +77,12 @@ func (a *App) editText(name string) ([]byte, error) {
 		return nil, err
 	}
 	path := f.Name()
+	_, werr := f.Write(initial)
 	f.Close()
+	if werr != nil {
+		os.Remove(path)
+		return nil, werr
+	}
 	defer os.Remove(path)
 
 	// $EDITOR may carry arguments (e.g. "code --wait"), so run it via sh.

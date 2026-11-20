@@ -16,6 +16,19 @@ import (
 	"tibi/internal/units"
 )
 
+// collectionID recognizes a collection URL (…/c/{id}) or "c/{id}".
+func collectionID(arg string) (string, bool) {
+	s := strings.TrimSpace(arg)
+	if u, err := url.Parse(s); err == nil && u.Scheme != "" {
+		s = u.Path
+	}
+	parts := strings.Split(strings.Trim(s, "/"), "/")
+	if len(parts) == 2 && parts[0] == "c" && id.Valid(parts[1]) {
+		return parts[1], true
+	}
+	return "", false
+}
+
 // itemID accepts an ID or any item URL (/{id}, /{id}.{ext}, /{id}/raw).
 func itemID(arg string) (string, error) {
 	s := strings.TrimSpace(arg)
@@ -265,8 +278,12 @@ func (a *App) rm(ctx context.Context, args []string) error {
 	}
 	failed := 0
 	for _, arg := range fs.Args() {
-		iid, err := itemID(arg)
-		if err == nil {
+		var err error
+		var iid string
+		if cid, ok := collectionID(arg); ok {
+			iid = "collection " + cid
+			err = cl.DeleteCollection(ctx, cid)
+		} else if iid, err = itemID(arg); err == nil {
 			err = cl.Delete(ctx, iid)
 		}
 		if err != nil {

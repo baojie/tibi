@@ -66,6 +66,8 @@ usage:
   tibi rm ID...                    delete items
   tibi open ID                     open an item in the browser
   tibi slug ID NAME                set a custom short link /s/NAME ("" clears)
+  tibi up --album FILE...          upload files as one collection, print its URL
+  tibi fork ID [FILE|-]            new version of a paste ($EDITOR if no input)
   tibi serve [--config PATH]       run the server
   tibi admin ...                   manage the server (tokens)
 
@@ -115,6 +117,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		err = a.open(ctx, args[1:])
 	case "slug":
 		err = a.slugCmd(ctx, args[1:])
+	case "fork":
+		err = a.fork(ctx, args[1:])
 	case "help", "-h", "--help":
 		fmt.Fprint(a.Stdout, Usage)
 		return 0
@@ -245,6 +249,7 @@ type outFlags struct {
 	name, title, lang    string
 	expire, slug         string
 	private, burn        bool
+	album                bool
 	md, raw, json, nocpy bool
 	keepMeta             bool
 }
@@ -269,6 +274,7 @@ func (a *App) uploadFlags(name string) (*pflag.FlagSet, *outFlags) {
 
 func (a *App) up(ctx context.Context, args []string) error {
 	fs, o := a.uploadFlags("up")
+	fs.BoolVar(&o.album, "album", false, "upload all files as one collection; print its URL")
 	if err := fs.Parse(args); err != nil {
 		return usageError{err.Error()}
 	}
@@ -282,6 +288,9 @@ func (a *App) up(ctx context.Context, args []string) error {
 	cl, cfg, err := a.client()
 	if err != nil {
 		return err
+	}
+	if o.album {
+		return a.album(ctx, cl, cfg, files, o)
 	}
 	var out []string
 	var failed int
