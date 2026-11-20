@@ -14,10 +14,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 
 	"tibi/internal/client"
+	"tibi/internal/units"
 )
 
 // App holds the CLI's environment so tests can drive it.
@@ -27,6 +29,10 @@ type App struct {
 	Stderr      io.Writer
 	StdinIsTTY  bool
 	StdoutIsTTY bool
+	StderrIsTTY bool
+	// ResumableThreshold: files larger than this use resumable uploads
+	// (0 = DefaultResumableThreshold).
+	ResumableThreshold int64
 	// Clipboard defaults to the system clipboard.
 	Clipboard Clipboard
 	Getenv    func(string) string
@@ -446,5 +452,59 @@ func (a *App) upload(ctx context.Context, cl *client.Client, path string, o *out
 	if opts.Filename == "" {
 		opts.Filename = filepath.Base(path)
 	}
+	if st.Size() > a.resumableThreshold() {
+		f.Close()
+		return a.uploadResumable(ctx, cl, path, opts)
+	}
 	return cl.Upload(ctx, f, st.Size(), opts)
+}
+
+// DefaultResumableThreshold: larger files use resumable (tus) uploads.
+const DefaultResumableThreshold = 20 << 20
+
+func (a *App) resumableThreshold() int64 {
+	if a.ResumableThreshold > 0 {
+		return a.ResumableThreshold
+	}
+	return DefaultResumableThreshold
+}
+
+// stateDir keeps resumable upload URLs between runs.
+func (a *App) stateDir() string {
+	dir := a.getenv("XDG_CACHE_HOME")
+	if dir == "" {
+		home := a.getenv("HOME")
+		if home == "" {
+			home, _ = os.UserHomeDir()
+		}
+		dir = filepath.Join(home, ".cache")
+	}
+	return filepath.Join(dir, "tibi", "uploads")
+}
+
+// uploadResumable sends a large file in resumable chunks, showing progress
+// on stderr when it is a terminal. Re-running the same command after an
+// interruption continues where it stopped.
+func (a *App) uploadResumable(ctx context.Context, cl *client.Client, path string, opts client.UploadOptions) (*client.Item, json.RawMessage, error) {
+	name := filepath.Base(path)
+	var last time.Time
+	progress := func(sent, total int64) {
+		if !a.StderrIsTTY || (time.Since(last) < 200*time.Millisecond && sent < total) {
+			return
+		}
+		last = time.Now()
+		pct := 100.0
+		if total > 0 {
+			pct = 100 * float64(sent) / float64(total)
+		}
+		fmt.Fprintf(a.Stderr, "\r%s: %5.1f%% (%s / %s)   ", name, pct, units.FormatBytes(sent), units.FormatBytes(total))
+	}
+	it, raw, err := cl.UploadResumable(ctx, client.Resumable{
+		Path: path, Options: opts, StateDir: a.stateDir(), Progress: progress,
+		Resumed: func(off int64) { fmt.Fprintf(a.Stderr, "%s: resuming at %s\n", name, units.FormatBytes(off)) },
+	})
+	if a.StderrIsTTY {
+		fmt.Fprintln(a.Stderr)
+	}
+	return it, raw, err
 }

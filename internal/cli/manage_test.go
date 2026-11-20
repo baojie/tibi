@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"tibi/internal/cli"
 )
@@ -169,5 +172,50 @@ func TestShareCommand(t *testing.T) {
 	}
 	if r := exec(t, env, nil, true, "share", "--ttl", "never", u); r.code == 0 {
 		t.Fatal("ttl never accepted")
+	}
+}
+
+func TestUpUsesResumableAndResumes(t *testing.T) {
+	e, env := loggedIn(t)
+	env["XDG_CACHE_HOME"] = t.TempDir()
+	data := make([]byte, 40<<20)
+	for i := range data {
+		data[i] = byte(i * 7)
+	}
+	f := filepath.Join(t.TempDir(), "video.bin")
+	writeFile(t, f, data)
+
+	run := func(ctx context.Context) (int, string, string) {
+		var out, errb bytes.Buffer
+		a := &cli.App{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errb, StdinIsTTY: true,
+			StderrIsTTY: true, ResumableThreshold: 1 << 20, Getenv: func(k string) string { return env[k] }}
+		code := a.Run(ctx, []string{"up", f})
+		return code, out.String(), errb.String()
+	}
+	// First attempt dies partway (the context stands in for Ctrl-C / kill).
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for {
+			entries, _ := os.ReadDir(filepath.Join(env["XDG_CACHE_HOME"], "tibi", "uploads"))
+			parts, _ := os.ReadDir(filepath.Join(e.Cfg.DataDir, "uploads"))
+			if len(entries) > 0 && len(parts) > 0 {
+				if fi, err := os.Stat(filepath.Join(e.Cfg.DataDir, "uploads", strings.TrimSuffix(parts[0].Name(), ".info"))); err == nil && fi.Size() > 16<<20 {
+					cancel()
+					return
+				}
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+	if code, out, _ := run(ctx); code == 0 || out != "" {
+		t.Fatalf("interrupted run: %d %q", code, out)
+	}
+	time.Sleep(200 * time.Millisecond)
+	code, out, stderr := run(context.Background())
+	if code != 0 || !strings.Contains(stderr, "resuming at") || !strings.Contains(stderr, "100.0%") {
+		t.Fatalf("second run: %d %q %q", code, out, stderr)
+	}
+	if got := fetch(t, strings.TrimSpace(out)+"/dl"); !bytes.Equal(got, data) {
+		t.Fatal("resumed upload differs")
 	}
 }

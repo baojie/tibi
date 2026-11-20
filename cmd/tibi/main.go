@@ -35,6 +35,7 @@ func main() {
 		Stderr:      os.Stderr,
 		StdinIsTTY:  term.IsTerminal(int(os.Stdin.Fd())),
 		StdoutIsTTY: term.IsTerminal(int(os.Stdout.Fd())),
+		StderrIsTTY: term.IsTerminal(int(os.Stderr.Fd())),
 		ReadSecret: func() (string, error) {
 			b, err := term.ReadPassword(int(os.Stdin.Fd()))
 			return string(b), err
