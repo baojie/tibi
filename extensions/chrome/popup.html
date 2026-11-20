@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="ui.css">
+<style>
+body { width: 340px; padding: 12px; }
+header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+header nav a { margin-left: 10px; font-size: 13px; }
+ul { list-style: none; padding: 0; margin: 0; }
+li { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+li img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex: none; }
+li .kind { width: 36px; text-align: center; font-size: 11px; flex: none; }
+li .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+li button { padding: 2px 8px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header><strong data-i18n="recent"></strong><nav><a id="upload" href="#" data-i18n="openUpload"></a><a id="settings" href="#" data-i18n="settings"></a></nav></header>
+<p id="status" class="status" hidden></p>
+<ul id="list"></ul>
+<script src="popup.js" type="module"></script>
+</body>
+</html>
