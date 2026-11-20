@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">tibi</string>
+    <string name="share_label">Upload to tibi</string>
+    <string name="tile_label">Upload screenshot</string>
+    <string name="channel_progress">Uploads in progress</string>
+    <string name="channel_result">Upload results</string>
+    <string name="uploading">Uploading to tibi…</string>
+    <string name="waiting_network">Upload paused: waiting for the network</string>
+    <string name="copied">Link copied</string>
+    <string name="copied_collection">Collection of %d copied</string>
+    <string name="copy">Copy</string>
+    <string name="share">Share</string>
+    <string name="failed">Upload failed</string>
+    <string name="not_configured">Set the tibi server and token first.</string>
+    <string name="nothing_to_upload">Nothing to upload in what was shared.</string>
+    <string name="no_screenshot">No screenshot found.</string>
+    <string name="server_label">Server URL</string>
+    <string name="token_label">API token</string>
+    <string name="token_help">Create one on the server: tibi admin token create --name android --scopes upload</string>
+    <string name="save">Save and test</string>
+    <string name="testing">Testing…</string>
+    <string name="connected_as">Connected as %s.</string>
+    <string name="connect_failed">Could not connect: %s</string>
+    <string name="media_permission">Allow access to screenshots (for the Quick Settings tile)</string>
+    <string name="howto">Share photos, videos, files or text from any app to “Upload to tibi”. The link is copied when the upload finishes; several photos become one collection.</string>
+</resources>

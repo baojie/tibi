@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="share_label">上传到 tibi</string>
+    <string name="tile_label">上传截图</string>
+    <string name="channel_progress">正在上传</string>
+    <string name="channel_result">上传结果</string>
+    <string name="uploading">正在上传到 tibi…</string>
+    <string name="waiting_network">上传已暂停：等待网络</string>
+    <string name="copied">链接已复制</string>
+    <string name="copied_collection">已复制 %d 项的合集链接</string>
+    <string name="copy">复制</string>
+    <string name="share">分享</string>
+    <string name="failed">上传失败</string>
+    <string name="not_configured">请先设置 tibi 服务器和令牌。</string>
+    <string name="nothing_to_upload">分享的内容里没有可上传的东西。</string>
+    <string name="no_screenshot">没有找到截图。</string>
+    <string name="server_label">服务器地址</string>
+    <string name="token_label">API 令牌</string>
+    <string name="token_help">在服务器上创建：tibi admin token create --name android --scopes upload</string>
+    <string name="save">保存并测试</string>
+    <string name="testing">正在测试…</string>
+    <string name="connected_as">已连接：%s。</string>
+    <string name="connect_failed">无法连接：%s</string>
+    <string name="media_permission">允许访问截图（快捷设置磁贴需要）</string>
+    <string name="howto">在任何应用里把照片、视频、文件或文字分享到“上传到 tibi”。上传完成后链接会被复制；多张照片会合成一个合集。</string>
+</resources>
