@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"os"
 
+	"os/signal"
+	"syscall"
+
 	"golang.org/x/term"
 
 	"tibi/internal/app"
 	"tibi/internal/cli"
+	"tibi/internal/mcp"
 )
 
 func main() {
@@ -35,6 +39,17 @@ func main() {
 			b, err := term.ReadPassword(int(os.Stdin.Fd()))
 			return string(b), err
 		},
+	}
+	if len(args) > 0 && args[0] == "mcp" {
+		srv := &mcp.Server{Name: "tibi", Version: app.Version, Log: os.Stderr,
+			Tools: &mcp.Toolbox{Client: a.APIClient, MaxFileBytes: 4 << 30}}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := srv.Serve(ctx, os.Stdin, os.Stdout); err != nil && ctx.Err() == nil {
+			fmt.Fprintln(os.Stderr, "tibi mcp:", err)
+			os.Exit(1)
+		}
+		return
 	}
 	os.Exit(a.Run(context.Background(), args))
 }

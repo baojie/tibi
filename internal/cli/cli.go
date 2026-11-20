@@ -71,6 +71,7 @@ usage:
   tibi share ID [--ttl 1h]         signed, expiring link (e.g. for a private item)
   tibi serve [--config PATH]       run the server
   tibi admin ...                   manage the server (tokens)
+  tibi mcp                         MCP server on stdio, for AI agents (uses tibi login's config)
 
 upload flags:
   -n, --name NAME    filename for stdin uploads
@@ -154,6 +155,13 @@ func (a *App) flagSet(name string) *pflag.FlagSet {
 	fs := pflag.NewFlagSet(name, pflag.ContinueOnError)
 	fs.SetOutput(a.Stderr)
 	return fs
+}
+
+// APIClient returns a client for the configured server and token (the
+// same ones `tibi login` saved, or TIBI_SERVER / TIBI_TOKEN).
+func (a *App) APIClient() (*client.Client, error) {
+	cl, _, err := a.client()
+	return cl, err
 }
 
 func (a *App) client() (*client.Client, Config, error) {
