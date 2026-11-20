@@ -40,7 +40,7 @@ $ADB shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "fil
 uri=
 for _ in $(seq 30); do
   id=$($ADB shell content query --uri content://media/external/images/media --projection _id:_display_name | tr -d '\r' |
-    grep "_display_name=$name\$" | sed -E 's/.*_id=([0-9]+),.*/\1/' | tail -1)
+    grep "_display_name=$name\$" | sed -E 's/.*_id=([0-9]+),.*/\1/' | tail -1 || true)
   [ -n "$id" ] && { uri=content://media/external/images/media/$id; break; }
   sleep 0.5
 done

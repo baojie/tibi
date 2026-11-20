@@ -50,7 +50,7 @@ add_media() { # local-file device-dir collection-uri
   $ADB push "$1" "/sdcard/$2/$name" >/dev/null
   $ADB shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file:///sdcard/$2/$name" >/dev/null
   for _ in $(seq 30); do
-    id=$($ADB shell content query --uri "$3" --projection _id:_display_name | tr -d '\r' | grep "_display_name=$name\$" | sed -E 's/.*_id=([0-9]+),.*/\1/' | tail -1)
+    id=$($ADB shell content query --uri "$3" --projection _id:_display_name | tr -d '\r' | grep "_display_name=$name\$" | sed -E 's/.*_id=([0-9]+),.*/\1/' | tail -1 || true)
     [ -n "$id" ] && { echo "$3/$id"; return; }
     sleep 0.5
   done
@@ -79,7 +79,7 @@ done_url() { # n timeout-seconds
 tap_id() {
   local b=
   for _ in $(seq 10); do
-    b=$(ui | grep "tibi.android:id/$1\"" | grep -oE 'bounds="[^"]*"' | grep -oE '[0-9]+' | tr '\n' ' ')
+    b=$(ui | grep "tibi.android:id/$1\"" | grep -oE 'bounds="[^"]*"' | grep -oE '[0-9]+' | tr '\n' ' ' || true)
     [ -n "$b" ] && break
     sleep 1
   done
@@ -131,7 +131,7 @@ it=$(api /api/v1/items/$id1)
 notified() { for _ in $(seq 10); do $ADB shell dumpsys notification --noredact 2>/dev/null | grep -q "$1" && return; sleep 1; done; return 1; }
 notified "$u1" || fail "no notification with $u1"
 # The share dialog shows the link (for sharing it on the spot).
-for _ in $(seq 10); do shown=$(ui | grep 'tibi.android:id/url' | grep -oE ' text="[^"]*"' | cut -d'"' -f2); [ "$shown" = "$u1" ] && break; sleep 1; done
+for _ in $(seq 10); do shown=$(ui | grep 'tibi.android:id/url' | grep -oE ' text="[^"]*"' | cut -d'"' -f2 || true); [ "$shown" = "$u1" ] && break; sleep 1; done
 [ "$shown" = "$u1" ] || fail "share dialog shows '$shown', want $u1"
 ui | grep 'tibi.android:id/share"' >/dev/null || fail "no Share button in the dialog"
 tap_id close   # "Done", as a user would
@@ -217,7 +217,7 @@ $ADB shell screencap -p /sdcard/Pictures/Screenshots/$name
 $ADB shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/Screenshots/$name >/dev/null
 sleep 2
 $ADB shell am force-stop $PKG
-n=$($ADB logcat -d -s tibi:I | grep -c 'done: ')
+n=$($ADB logcat -d -s tibi:I | grep -c 'done: ' || true)
 $ADB shell cmd statusbar add-tile $PKG/.ScreenshotTileService >/dev/null
 $ADB shell cmd statusbar expand-settings >/dev/null # tiles take clicks only while shown
 sleep 2
