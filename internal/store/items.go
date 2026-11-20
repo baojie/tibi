@@ -59,6 +59,7 @@ type Item struct {
 	Meta          string
 	TokenID       int64
 	ViewCount     int64
+	BytesServed   int64
 	CreatedAt     int64
 	ExpiresAt     *int64
 	DeletedAt     *int64
@@ -168,7 +169,7 @@ func (s *Store) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 
 const itemCols = `id, kind, mime, orig_mime, filename, ext, size, sha256, title, lang, charset, width, height,
 	duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, view_count, created_at, expires_at, deleted_at,
-	collection_id, position, forked_from`
+	collection_id, position, forked_from, bytes_served`
 
 func scanItem(sc interface{ Scan(...any) error }) (*Item, error) {
 	var it Item
@@ -176,7 +177,7 @@ func scanItem(sc interface{ Scan(...any) error }) (*Item, error) {
 	var width, height, dur, exp, del, pos sql.NullInt64
 	err := sc.Scan(&it.ID, &it.Kind, &it.Mime, &origMime, &filename, &it.Ext, &it.Size, &it.SHA256, &title,
 		&lang, &charset, &width, &height, &dur, &it.Thumb, &it.Visibility, &slug, &it.BurnAfterRead, &source, &meta,
-		&it.TokenID, &it.ViewCount, &it.CreatedAt, &exp, &del, &coll, &pos, &forked)
+		&it.TokenID, &it.ViewCount, &it.CreatedAt, &exp, &del, &coll, &pos, &forked, &it.BytesServed)
 	if err != nil {
 		return nil, err
 	}
