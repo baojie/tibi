@@ -151,3 +151,23 @@ func TestSearchCommand(t *testing.T) {
 		t.Fatalf("no query: %+v", r)
 	}
 }
+
+func TestShareCommand(t *testing.T) {
+	_, env := loggedIn(t)
+	r := exec(t, env, strings.NewReader("top secret"), false, "up", "-p", "-")
+	u := strings.TrimSpace(r.stdout)
+	if statusOf(t, u) != 404 {
+		t.Fatal("private item public")
+	}
+	r = exec(t, env, nil, true, "share", "--ttl", "10m", u)
+	link := strings.TrimSpace(r.stdout)
+	if r.code != 0 || !strings.Contains(link, "sig=") || !strings.Contains(r.stderr, "valid until") {
+		t.Fatalf("share: %+v", r)
+	}
+	if statusOf(t, link) != 200 {
+		t.Fatal("share link does not open the private item")
+	}
+	if r := exec(t, env, nil, true, "share", "--ttl", "never", u); r.code == 0 {
+		t.Fatal("ttl never accepted")
+	}
+}

@@ -68,6 +68,7 @@ usage:
   tibi slug ID NAME                set a custom short link /s/NAME ("" clears)
   tibi up --album FILE...          upload files as one collection, print its URL
   tibi fork ID [FILE|-]            new version of a paste ($EDITOR if no input)
+  tibi share ID [--ttl 1h]         signed, expiring link (e.g. for a private item)
   tibi serve [--config PATH]       run the server
   tibi admin ...                   manage the server (tokens)
 
@@ -119,6 +120,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		err = a.slugCmd(ctx, args[1:])
 	case "fork":
 		err = a.fork(ctx, args[1:])
+	case "share":
+		err = a.share(ctx, args[1:])
 	case "help", "-h", "--help":
 		fmt.Fprint(a.Stdout, Usage)
 		return 0

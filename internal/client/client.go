@@ -395,3 +395,24 @@ func (c *Client) DeleteCollection(ctx context.Context, id string) error {
 	_, err = c.do(req, nil)
 	return err
 }
+
+// ShareLink is a signed, time-limited URL.
+type ShareLink struct {
+	URL       string `json:"url"`
+	ExpiresAt int64  `json:"expires_at"`
+}
+
+// Share returns a signed link to item id valid for ttl (e.g. "1h"; "" = 1h).
+func (c *Client) Share(ctx context.Context, id, ttl string) (*ShareLink, error) {
+	u := c.Server + "/api/v1/items/" + url.PathEscape(id) + "/share-link"
+	if ttl != "" {
+		u += "?ttl=" + url.QueryEscape(ttl)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	var l ShareLink
+	_, err = c.do(req, &l)
+	return &l, err
+}

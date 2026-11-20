@@ -360,3 +360,31 @@ func (a *App) slugCmd(ctx context.Context, args []string) error {
 	fmt.Fprintln(a.Stdout, it.SlugURL)
 	return nil
 }
+
+func (a *App) share(ctx context.Context, args []string) error {
+	fs := a.flagSet("share")
+	ttl := fs.String("ttl", "1h", "how long the link works, e.g. 10m, 1h, 7d")
+	noCopy := fs.Bool("no-copy", false, "do not copy to clipboard")
+	if err := fs.Parse(args); err != nil {
+		return usageError{err.Error()}
+	}
+	if fs.NArg() != 1 {
+		return usageError{"usage: tibi share ID [--ttl 1h]"}
+	}
+	iid, err := itemID(fs.Arg(0))
+	if err != nil {
+		return usageError{err.Error()}
+	}
+	cl, cfg, err := a.client()
+	if err != nil {
+		return err
+	}
+	l, err := cl.Share(ctx, iid, *ttl)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(a.Stdout, l.URL)
+	fmt.Fprintf(a.Stderr, "valid until %s\n", time.Unix(l.ExpiresAt, 0).Format(time.RFC3339))
+	a.copyResult(cfg, &outFlags{nocpy: *noCopy}, []string{l.URL})
+	return nil
+}
