@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.17] — ACDSeeN integration
+
+PLAN's "adseen" turned out to be ACDSeeN, a desktop image viewer with no
+database, so the integration is an upload action rather than an asset
+pipeline: there are no records to store links back into.
+
+### Added
+- ACDSeeN (separate repository): **Upload to tibi** in its File and
+  right-click menus, shown only when the tibi CLI is logged in on the
+  machine; one image → item link, several → collection link, copied to the
+  clipboard; `source=acdseen`. No tibi changes were needed: raw upload,
+  `POST /api/v1/collections` and `GET /api/v1/items?source=` already cover
+  it (checked end to end against a real server).
+- `docs/CLIENTS.md`: ACDSeeN section.
+
 ## [0.0.16] — Android app
 
 ### Added

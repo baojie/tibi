@@ -118,6 +118,16 @@ the tile. Plain `http://` servers work (for a LAN); use HTTPS otherwise.
 `android/scripts/emulator-test.sh` is the acceptance test on an emulator
 (also run in CI).
 
+## ACDSeeN (desktop image viewer)
+
+ACDSeeN, a remake of the 1996 ACDSee
+browser/viewer, has **Upload to tibi** (`Ctrl+Shift+U`, File and
+right-click menus) once the tibi CLI is logged in on the machine — it reads
+`~/.config/tibi/config.toml` (or `TIBI_SERVER` / `TIBI_TOKEN`), so there is
+nothing to configure in the viewer. One image → its link, several → one
+collection; the link goes to the clipboard. Uploads carry `source=acdseen`,
+so `GET /api/v1/items?source=acdseen` lists everything sent from it.
+
 ## ShareX (Windows)
 
 1. Edit `integrations/sharex/tibi.sxcu`: set `RequestURL` to your server and
