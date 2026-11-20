@@ -109,5 +109,5 @@ release:
   draft: true
   prerelease: auto
 
-changelog:
-  disable: true   # CHANGELOG.md is the changelog
+# Release notes come from CHANGELOG.md (--release-notes, see release.yml);
+# don't set changelog.disable, which would drop them too.
