@@ -19,6 +19,8 @@ RUN apt-get update \
  && useradd --system --uid 10001 --home-dir /data --shell /usr/sbin/nologin tibi \
  && install -d -o tibi -g tibi /data
 COPY --from=build /out/tibi /usr/bin/tibi
+COPY --from=build /src/LICENSE /usr/share/doc/tibi/LICENSE
+LABEL org.opencontainers.image.licenses="AGPL-3.0-only" org.opencontainers.image.title="tibi"
 USER tibi
 ENV TIBI_DATA_DIR=/data TIBI_LISTEN=0.0.0.0:8070 TIBI_BASE_URL=http://localhost:8070
 VOLUME /data

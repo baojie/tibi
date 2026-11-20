@@ -5,7 +5,7 @@
   "main": "index.js",
   "keywords": ["picgo", "picgo-gui-plugin", "picgo-plugin", "piclist", "tibi", "image-host"],
   "files": ["index.js", "README.md"],
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-only",
   "engines": { "picgo": "^1.4.0" },
   "scripts": { "test": "node test.mjs" }
 }

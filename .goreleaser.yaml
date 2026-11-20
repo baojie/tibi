@@ -32,6 +32,7 @@ archives:
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
+      - LICENSE
       - README.md
       - CHANGELOG.md
       - docs/*.md
@@ -49,13 +50,16 @@ nfpms:
     vendor: tibi
     maintainer: tibi maintainers <noreply@users.noreply.github.com>
     description: Self-hosted image host and pastebin — upload anything, get a link.
-    license: TBD
+    license: AGPL-3.0-only
     section: web
     bindir: /usr/bin
     recommends: [libvips-tools, libheif-plugin-libde265]
     contents:
       - src: packaging/systemd/tibi.service
         dst: /lib/systemd/system/tibi.service
+        file_info: { mode: 0644 }
+      - src: LICENSE
+        dst: /usr/share/doc/tibi/copyright
         file_info: { mode: 0644 }
       - src: packaging/server.toml
         dst: /etc/tibi/server.toml
