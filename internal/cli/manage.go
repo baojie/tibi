@@ -83,6 +83,56 @@ func (a *App) ls(ctx context.Context, args []string) error {
 	return tw.Flush()
 }
 
+func (a *App) search(ctx context.Context, args []string) error {
+	fs := a.flagSet("search")
+	n := fs.IntP("number", "n", 20, "how many results")
+	kind := fs.String("kind", "", "only this kind (image, text, file, …)")
+	asJSON := fs.Bool("json", false, "print one JSON object per line")
+	if err := fs.Parse(args); err != nil {
+		return usageError{err.Error()}
+	}
+	q := strings.Join(fs.Args(), " ")
+	if strings.TrimSpace(q) == "" {
+		return usageError{"usage: tibi search QUERY"}
+	}
+	cl, _, err := a.client()
+	if err != nil {
+		return err
+	}
+	var hits []client.SearchHit
+	cursor := ""
+	for len(hits) < *n {
+		page, err := cl.Search(ctx, q, client.ListOptions{Limit: min(*n-len(hits), 100), Cursor: cursor, Kind: *kind})
+		if err != nil {
+			return err
+		}
+		hits = append(hits, page.Items...)
+		if page.NextCursor == nil {
+			break
+		}
+		cursor = *page.NextCursor
+	}
+	if *asJSON {
+		enc := json.NewEncoder(a.Stdout)
+		for _, h := range hits {
+			enc.Encode(h)
+		}
+		return nil
+	}
+	if len(hits) == 0 {
+		fmt.Fprintln(a.Stderr, "no matches")
+		return nil
+	}
+	tw := tabwriter.NewWriter(a.Stdout, 0, 4, 2, ' ', 0)
+	for _, h := range hits {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", h.URL, h.Kind, ago(h.CreatedAt), label(h.Item))
+		if h.Snippet != "" {
+			fmt.Fprintf(tw, "    %s\n", h.Snippet) // no tabs: not part of the columns
+		}
+	}
+	return tw.Flush()
+}
+
 func label(it client.Item) string {
 	switch {
 	case it.Title != "":

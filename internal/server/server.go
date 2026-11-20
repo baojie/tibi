@@ -89,6 +89,7 @@ func (s *Server) routes() {
 	m.Handle("GET /api/v1/whoami", s.auth("", http.HandlerFunc(s.handleWhoami)))
 	m.Handle("POST /api/v1/items", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleUpload)))
 	m.Handle("GET /api/v1/items", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleList)))
+	m.Handle("GET /api/v1/search", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleSearch)))
 	m.Handle("GET /api/v1/items/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleGetItem)))
 	m.Handle("PATCH /api/v1/items/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handlePatchItem)))
 	m.Handle("DELETE /api/v1/items/{id}", s.auth(store.ScopeDelete, http.HandlerFunc(s.handleDeleteItem)))

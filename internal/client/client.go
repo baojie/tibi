@@ -246,3 +246,36 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 	_, err = c.do(req, nil)
 	return err
 }
+
+// SearchHit is an item with the matching line of its text.
+type SearchHit struct {
+	Item
+	Snippet string `json:"snippet,omitempty"`
+}
+
+// SearchPage is one page of search results.
+type SearchPage struct {
+	Items      []SearchHit `json:"items"`
+	NextCursor *string     `json:"next_cursor"`
+}
+
+// Search finds items whose title, filename or text contain every word of q.
+func (c *Client) Search(ctx context.Context, q string, o ListOptions) (*SearchPage, error) {
+	v := url.Values{"q": {q}}
+	if o.Limit > 0 {
+		v.Set("limit", strconv.Itoa(o.Limit))
+	}
+	if o.Cursor != "" {
+		v.Set("cursor", o.Cursor)
+	}
+	if o.Kind != "" {
+		v.Set("kind", o.Kind)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Server+"/api/v1/search?"+v.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	var p SearchPage
+	_, err = c.do(req, &p)
+	return &p, err
+}

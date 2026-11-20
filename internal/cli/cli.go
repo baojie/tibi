@@ -61,6 +61,7 @@ usage:
   tibi clip                        upload the clipboard (image preferred, else text)
   tibi paste [-l LANG] [-t TITLE]  paste text from stdin, or write it in $EDITOR
   tibi ls [-n 20] [--kind K] [--source S]   list recent items
+  tibi search QUERY [-n 20] [--kind K]      find items by words in title, name or text
   tibi info ID                     show an item's details
   tibi rm ID...                    delete items
   tibi open ID                     open an item in the browser
@@ -104,6 +105,8 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		err = a.paste(ctx, args[1:])
 	case "ls":
 		err = a.ls(ctx, args[1:])
+	case "search":
+		err = a.search(ctx, args[1:])
 	case "info":
 		err = a.info(ctx, args[1:])
 	case "rm":

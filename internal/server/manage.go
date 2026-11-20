@@ -161,3 +161,51 @@ func (s *Server) internal(w http.ResponseWriter, what string, err error) {
 	s.log.Error(what, "err", err)
 	apiError(w, http.StatusInternalServerError, "internal", "internal error")
 }
+
+// SearchHitJSON is an item plus the matching line of its text.
+type SearchHitJSON struct {
+	ItemJSON
+	Snippet string `json:"snippet,omitempty"`
+}
+
+// handleSearch serves GET /api/v1/search?q&kind&limit&cursor.
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 20
+	if v := q.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 100 {
+			apiError(w, http.StatusBadRequest, "bad_request", "limit must be 1–100")
+			return
+		}
+		limit = n
+	}
+	query := strings.TrimSpace(q.Get("q"))
+	if len(query) > 500 {
+		apiError(w, http.StatusBadRequest, "bad_request", "query too long")
+		return
+	}
+	hits, next, err := s.store.Search(r.Context(), store.SearchFilter{
+		Query: query, Kind: q.Get("kind"), Limit: limit, Cursor: q.Get("cursor"),
+	})
+	switch {
+	case errors.Is(err, store.ErrBadQuery), errors.Is(err, store.ErrBadCursor):
+		apiError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	case err != nil && strings.Contains(err.Error(), "too many"):
+		apiError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	case err != nil:
+		s.internal(w, "search", err)
+		return
+	}
+	out := make([]SearchHitJSON, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, SearchHitJSON{s.itemJSON(h.Item), h.Snippet})
+	}
+	var nc *string
+	if next != "" {
+		nc = &next
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out, "next_cursor": nc})
+}

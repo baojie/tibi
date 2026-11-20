@@ -126,3 +126,28 @@ func statusOf(t *testing.T, url string) int {
 	resp.Body.Close()
 	return resp.StatusCode
 }
+
+func TestSearchCommand(t *testing.T) {
+	_, env := loggedIn(t)
+	exec(t, env, strings.NewReader("func handleUpload() {}\n"), false, "up", "-n", "h.go", "-")
+	exec(t, env, strings.NewReader("题壁诗\n"), false, "paste")
+	r := exec(t, env, nil, true, "search", "handleUpload")
+	lines := strings.Split(strings.TrimRight(r.stdout, "\n"), "\n")
+	if r.code != 0 || len(lines) != 2 || !strings.Contains(lines[0], "h.go") || strings.TrimSpace(lines[1]) != "func handleUpload() {}" {
+		t.Fatalf("search: %+v", r)
+	}
+	r = exec(t, env, nil, true, "search", "题壁")
+	if r.code != 0 || !strings.Contains(r.stdout, "题壁诗") {
+		t.Fatalf("chinese: %+v", r)
+	}
+	r = exec(t, env, nil, true, "search", "--json", "题壁")
+	if !strings.Contains(r.stdout, `"snippet":"题壁诗"`) {
+		t.Fatalf("json: %q", r.stdout)
+	}
+	if r := exec(t, env, nil, true, "search", "zzzznomatch"); r.code != 0 || r.stdout != "" || !strings.Contains(r.stderr, "no matches") {
+		t.Fatalf("no match: %+v", r)
+	}
+	if r := exec(t, env, nil, true, "search"); r.code != 2 {
+		t.Fatalf("no query: %+v", r)
+	}
+}
