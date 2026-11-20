@@ -4,6 +4,35 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.8] — Collections and forks
+
+### Added
+- Collections (albums and multi-file pastes) sharing the item ID namespace:
+  `POST/GET /api/v1/collections`, `GET/PATCH/DELETE /api/v1/collections/{id}`
+  (title, visibility, expiry, reorder by listing item IDs). Deleting a
+  collection deletes its items.
+- Uploads with `collection=new` (plus `collection_title`) put all files
+  into a new collection in order; `collection=<id>` appends. The response
+  is `{"collection": …, "items": […]}`. Items carry `collection_id`,
+  `collection_url` and `position`; `GET /api/v1/items?collection=` filters.
+- `/c/{id}` page: a thumbnail grid for all-image albums, otherwise every
+  item stacked in order (images, players, highlighted code with per-file
+  line links such as `#f2-L20-L24`, rendered Markdown). Private
+  collections need a `read_private` token.
+- Forks: `POST /api/v1/items/{id}/fork` creates a new version with
+  `forked_from` (title, filename, lang and visibility default to the
+  original's); the original never changes. Item pages link to what they
+  were forked from and to their collection. Text pages have a Fork editor
+  for browsers that hold an API token (stored by the upcoming web upload
+  page).
+- CLI: `tibi up --album FILE...` prints one collection URL; `tibi fork ID
+  [FILE|-]` (opens `$EDITOR` prefilled with the original when no input is
+  given); `tibi rm` accepts collection URLs.
+
+### Fixed
+- Copy and fork buttons fetch raw text from the page's own origin, so they
+  also work when `raw_base_url` is a separate domain.
+
 ## [0.0.7] — Search and API contract
 
 ### Added

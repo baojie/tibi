@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.7
+  version: 0.0.8
   description: |
     tibi (题壁) is a self-hosted image host and pastebin: upload an image, a
     text or code snippet, or any file, and get back a URL to share.
@@ -20,7 +20,14 @@ info:
     **Public URLs** (not part of this API) are fixed forever:
     `/{id}` view page, `/{id}.{ext}` raw bytes for embedding, `/{id}/raw`,
     `/{id}/dl` download, `/{id}/thumb` image thumbnail, `/s/{slug}` short
-    link. Raw routes support `Range`.
+    link, `/c/{id}` collection. Raw routes support `Range`.
+
+    **Collections** group items in order: an album (all images: shown as a
+    thumbnail grid) or a multi-file paste (shown stacked). Item and
+    collection IDs share one namespace.
+
+    **Content is immutable.** To "edit" an item, fork it: the new item has
+    `forked_from` set and the original stays as it was.
 servers:
   - url: /
 security:
@@ -28,6 +35,8 @@ security:
 tags:
   - name: items
     description: Upload, list, inspect, change and delete items.
+  - name: collections
+    description: Albums and multi-file pastes.
   - name: search
   - name: meta
     description: Server and token information.
@@ -137,6 +146,11 @@ paths:
           schema: { type: string, enum: ["0", "1", "true", "false"] }
         - { name: source, in: query, schema: { type: string }, description: "Client tag, e.g. `cli`, `chrome`, `adseen`." }
         - { name: meta, in: query, schema: { type: string }, description: "Client metadata (a JSON object as text)." }
+        - name: collection
+          in: query
+          description: "`new` puts all uploaded files into a new collection, in order; a collection ID appends them to it. The response is then a CollectionUpload. Not allowed with `burn_after_read`."
+          schema: { type: string }
+        - { name: collection_title, in: query, schema: { type: string }, description: "Title of the new collection (with `collection=new`)." }
       requestBody:
         required: true
         content:
@@ -158,15 +172,18 @@ paths:
                 burn_after_read: { type: string }
                 source: { type: string }
                 meta: { type: string }
+                collection: { type: string }
+                collection_title: { type: string }
       responses:
         "201":
-          description: Created. An Item for one file, an array of Items for several.
+          description: Created. An Item for one file, an array of Items for several, or a CollectionUpload when `collection` is set.
           content:
             application/json:
               schema:
                 oneOf:
                   - { $ref: "#/components/schemas/Item" }
                   - { type: array, minItems: 2, items: { $ref: "#/components/schemas/Item" } }
+                  - { $ref: "#/components/schemas/CollectionUpload" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -181,6 +198,7 @@ paths:
         - { $ref: "#/components/parameters/cursor" }
         - { $ref: "#/components/parameters/kind" }
         - { name: source, in: query, schema: { type: string }, description: Only items uploaded with this `source` tag. }
+        - { name: collection, in: query, schema: { type: string }, description: Only items of this collection. }
       responses:
         "200":
           description: A page of items.
@@ -244,6 +262,138 @@ paths:
       summary: Delete an item
       operationId: deleteItem
       description: The item returns 404 at once and is purged after a day. Requires scope `delete`.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/items/{id}/fork:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [items]
+      summary: Fork an item (new version)
+      operationId: forkItem
+      description: |
+        The request body is the new content, as in a raw-body upload. The
+        new item gets `forked_from` = the original's ID; the original is
+        unchanged. `title`, `filename`, `lang` and `visibility` default to
+        the original's; forks of text stay text. Requires scope `upload`.
+      parameters:
+        - { name: title, in: query, schema: { type: string } }
+        - { name: filename, in: query, schema: { type: string } }
+        - { name: lang, in: query, schema: { type: string } }
+        - { name: kind, in: query, schema: { type: string, enum: [text, file] } }
+        - { name: visibility, in: query, schema: { type: string, enum: [unlisted, private] } }
+        - { name: expires, in: query, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: The new item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Item" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+  /api/v1/collections:
+    post:
+      tags: [collections]
+      summary: Create a collection
+      operationId: createCollection
+      description: Optionally gathers existing items, in the given order (items already in another collection are rejected). Requires scope `upload`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title: { type: string }
+                visibility: { type: string, enum: [unlisted, private] }
+                expires: { type: string }
+                items: { type: array, items: { type: string } }
+      responses:
+        "201":
+          description: The collection, with its items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Collection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    get:
+      tags: [collections]
+      summary: List collections, newest first
+      operationId: listCollections
+      description: Requires scope `upload`.
+      parameters:
+        - { $ref: "#/components/parameters/limit" }
+        - { $ref: "#/components/parameters/cursor" }
+      responses:
+        "200":
+          description: A page of collections (without their items).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/collections/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [collections]
+      summary: A collection and its items
+      operationId: getCollection
+      description: Requires scope `upload`.
+      responses:
+        "200":
+          description: The collection, with its live items in order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Collection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [collections]
+      summary: Change a collection or reorder its items
+      operationId: patchCollection
+      description: "`items` must list every item of the collection exactly once, in the new order. Requires scope `upload`."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title: { type: string }
+                visibility: { type: string, enum: [unlisted, private] }
+                expires: { type: string }
+                items: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: The updated collection, with its items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Collection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [collections]
+      summary: Delete a collection and its items
+      operationId: deleteCollection
+      description: The collection and every item in it are deleted (purged after a day). Requires scope `delete`.
       responses:
         "204": { description: Deleted. }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -375,6 +525,10 @@ components:
         visibility: { type: string, enum: [unlisted, private] }
         slug: { type: string }
         slug_url: { type: string, format: uri }
+        collection_id: { type: string }
+        collection_url: { type: string, format: uri }
+        position: { type: integer, description: Order within the collection. }
+        forked_from: { type: string, description: ID of the item this one is a new version of. }
         burn_after_read: { type: boolean }
         source: { type: string }
         view_count: { type: integer }
@@ -387,6 +541,33 @@ components:
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Item" } }
         next_cursor: { type: [string, "null"], description: Pass as `cursor` for the next page; null on the last page. }
+    Collection:
+      type: object
+      additionalProperties: false
+      required: [id, url, visibility, item_count, expires_at, created_at]
+      properties:
+        id: { type: string, pattern: "^[0-9A-Za-z]{8}$" }
+        url: { type: string, format: uri, description: "The collection page, `/c/{id}`." }
+        title: { type: string }
+        visibility: { type: string, enum: [unlisted, private] }
+        item_count: { type: integer }
+        expires_at: { type: [integer, "null"] }
+        created_at: { type: integer }
+        items: { type: array, items: { $ref: "#/components/schemas/Item" }, description: Present when a single collection is returned. }
+    CollectionPage:
+      type: object
+      additionalProperties: false
+      required: [collections, next_cursor]
+      properties:
+        collections: { type: array, items: { $ref: "#/components/schemas/Collection" } }
+        next_cursor: { type: [string, "null"] }
+    CollectionUpload:
+      type: object
+      additionalProperties: false
+      required: [collection, items]
+      properties:
+        collection: { $ref: "#/components/schemas/Collection" }
+        items: { type: array, items: { $ref: "#/components/schemas/Item" }, description: The items just uploaded. }
     SearchHit:
       description: An Item plus `snippet`, the line of text containing the first query word.
       allOf:

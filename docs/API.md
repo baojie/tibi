@@ -1,4 +1,4 @@
-# tibi API 0.0.7
+# tibi API 0.0.8
 
 <!-- Generated from api/openapi.yaml by `go run ./tools/apidoc`. Do not edit. -->
 
@@ -19,7 +19,14 @@ scopes: `upload` (upload, list, search, view metadata, change metadata),
 **Public URLs** (not part of this API) are fixed forever:
 `/{id}` view page, `/{id}.{ext}` raw bytes for embedding, `/{id}/raw`,
 `/{id}/dl` download, `/{id}/thumb` image thumbnail, `/s/{slug}` short
-link. Raw routes support `Range`.
+link, `/c/{id}` collection. Raw routes support `Range`.
+
+**Collections** group items in order: an album (all images: shown as a
+thumbnail grid) or a multi-file paste (shown stacked). Item and
+collection IDs share one namespace.
+
+**Content is immutable.** To "edit" an item, fork it: the new item has
+`forked_from` set and the original stays as it was.
 
 ## Endpoints
 
@@ -30,7 +37,13 @@ link. Raw routes support `Range`.
 | `GET` | [`/api/v1/items/{id}`](#get-api-v1-items-id) | Item metadata |
 | `PATCH` | [`/api/v1/items/{id}`](#patch-api-v1-items-id) | Change metadata |
 | `DELETE` | [`/api/v1/items/{id}`](#delete-api-v1-items-id) | Delete an item |
+| `POST` | [`/api/v1/items/{id}/fork`](#post-api-v1-items-id-fork) | Fork an item (new version) |
 | `GET` | [`/api/v1/search`](#get-api-v1-search) | Full-text search |
+| `GET` | [`/api/v1/collections`](#get-api-v1-collections) | List collections, newest first |
+| `POST` | [`/api/v1/collections`](#post-api-v1-collections) | Create a collection |
+| `GET` | [`/api/v1/collections/{id}`](#get-api-v1-collections-id) | A collection and its items |
+| `PATCH` | [`/api/v1/collections/{id}`](#patch-api-v1-collections-id) | Change a collection or reorder its items |
+| `DELETE` | [`/api/v1/collections/{id}`](#delete-api-v1-collections-id) | Delete a collection and its items |
 | `GET` | [`/api/v1/openapi.yaml`](#get-api-v1-openapi-yaml) | This document |
 | `GET` | [`/api/v1/whoami`](#get-api-v1-whoami) | Describe the calling token |
 | `GET` | [`/healthz`](#get-healthz) | Liveness probe |
@@ -48,6 +61,7 @@ Live items (not deleted or expired), including private ones. Requires scope `upl
 | `cursor` | query | string | The `next_cursor` of the previous page. |
 | `kind` | query | [Kind](#schema-kind) |  |
 | `source` | query | string | Only items uploaded with this `source` tag. |
+| `collection` | query | string | Only items of this collection. |
 
 | status | meaning | body |
 |---|---|---|
@@ -99,12 +113,14 @@ kept. Identical content is stored once.
 | `burn_after_read` | query | string | Delete the item when it is first revealed by a visitor without a `read_private` token. |
 | `source` | query | string | Client tag, e.g. `cli`, `chrome`, `adseen`. |
 | `meta` | query | string | Client metadata (a JSON object as text). |
+| `collection` | query | string | `new` puts all uploaded files into a new collection, in order; a collection ID appends them to it. The response is then a CollectionUpload. Not allowed with `burn_after_read`. |
+| `collection_title` | query | string | Title of the new collection (with `collection=new`). |
 
 Request body: `application/octet-stream` (string (binary)), `multipart/form-data` (object)
 
 | status | meaning | body |
 |---|---|---|
-| 201 | Created. An Item for one file, an array of Items for several. | `application/json` [Item](#schema-item) or array of [Item](#schema-item) |
+| 201 | Created. An Item for one file, an array of Items for several, or a CollectionUpload when `collection` is set. | `application/json` [Item](#schema-item) or array of [Item](#schema-item) or [CollectionUpload](#schema-collectionupload) |
 | 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
@@ -170,6 +186,37 @@ The item returns 404 at once and is purged after a day. Requires scope `delete`.
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
 
+<a id="post-api-v1-items-id-fork"></a>
+### `POST /api/v1/items/{id}/fork`
+
+**Fork an item (new version)**
+
+The request body is the new content, as in a raw-body upload. The
+new item gets `forked_from` = the original's ID; the original is
+unchanged. `title`, `filename`, `lang` and `visibility` default to
+the original's; forks of text stay text. Requires scope `upload`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+| `title` | query | string |  |
+| `filename` | query | string |  |
+| `lang` | query | string |  |
+| `kind` | query | string |  |
+| `visibility` | query | string |  |
+| `expires` | query | string |  |
+
+Request body: `application/octet-stream` (string (binary))
+
+| status | meaning | body |
+|---|---|---|
+| 201 | The new item. | `application/json` [Item](#schema-item) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+| 413 | The upload exceeds `max_upload_bytes`. | `application/json` [Error](#schema-error) |
+
 <a id="get-api-v1-search"></a>
 ### `GET /api/v1/search`
 
@@ -196,6 +243,98 @@ scope `upload`.
 | 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+
+<a id="get-api-v1-collections"></a>
+### `GET /api/v1/collections`
+
+**List collections, newest first**
+
+Requires scope `upload`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `limit` | query | integer |  |
+| `cursor` | query | string | The `next_cursor` of the previous page. |
+
+| status | meaning | body |
+|---|---|---|
+| 200 | A page of collections (without their items). | `application/json` [CollectionPage](#schema-collectionpage) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+
+<a id="post-api-v1-collections"></a>
+### `POST /api/v1/collections`
+
+**Create a collection**
+
+Optionally gathers existing items, in the given order (items already in another collection are rejected). Requires scope `upload`.
+
+Request body: `application/json` (object)
+
+| status | meaning | body |
+|---|---|---|
+| 201 | The collection, with its items. | `application/json` [Collection](#schema-collection) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+
+<a id="get-api-v1-collections-id"></a>
+### `GET /api/v1/collections/{id}`
+
+**A collection and its items**
+
+Requires scope `upload`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+
+| status | meaning | body |
+|---|---|---|
+| 200 | The collection, with its live items in order. | `application/json` [Collection](#schema-collection) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+
+<a id="patch-api-v1-collections-id"></a>
+### `PATCH /api/v1/collections/{id}`
+
+**Change a collection or reorder its items**
+
+`items` must list every item of the collection exactly once, in the new order. Requires scope `upload`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+
+Request body: `application/json` (object)
+
+| status | meaning | body |
+|---|---|---|
+| 200 | The updated collection, with its items. | `application/json` [Collection](#schema-collection) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+
+<a id="delete-api-v1-collections-id"></a>
+### `DELETE /api/v1/collections/{id}`
+
+**Delete a collection and its items**
+
+The collection and every item in it are deleted (purged after a day). Requires scope `delete`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+
+| status | meaning | body |
+|---|---|---|
+| 204 | Deleted. | — |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-openapi-yaml"></a>
 ### `GET /api/v1/openapi.yaml`
@@ -234,6 +373,36 @@ No authentication.
 
 ## Schemas
 
+<a id="schema-collection"></a>
+### Collection
+
+| field | type | required | description |
+|---|---|---|---|
+| `created_at` | integer | yes |  |
+| `expires_at` | integer or null | yes |  |
+| `id` | string | yes |  |
+| `item_count` | integer | yes |  |
+| `url` | string (uri) | yes | The collection page, `/c/{id}`. |
+| `visibility` | string | yes | One of: `unlisted`, `private`. |
+| `items` | array of [Item](#schema-item) |  | Present when a single collection is returned. |
+| `title` | string |  |  |
+
+<a id="schema-collectionpage"></a>
+### CollectionPage
+
+| field | type | required | description |
+|---|---|---|---|
+| `collections` | array of [Collection](#schema-collection) | yes |  |
+| `next_cursor` | string or null | yes |  |
+
+<a id="schema-collectionupload"></a>
+### CollectionUpload
+
+| field | type | required | description |
+|---|---|---|---|
+| `collection` | [Collection](#schema-collection) | yes |  |
+| `items` | array of [Item](#schema-item) | yes | The items just uploaded. |
+
 <a id="schema-error"></a>
 ### Error
 
@@ -260,11 +429,15 @@ No authentication.
 | `view_count` | integer | yes |  |
 | `visibility` | string | yes | One of: `unlisted`, `private`. |
 | `charset` | string |  | Text: original charset when converted to UTF-8, e.g. `GBK`. |
+| `collection_id` | string |  |  |
+| `collection_url` | string (uri) |  |  |
 | `duration_ms` | integer |  | Video and audio length |
 | `filename` | string |  |  |
+| `forked_from` | string |  | ID of the item this one is a new version of. |
 | `height` | integer |  | Images: display height. |
 | `lang` | string |  | Text: language, e.g. `go`, `python`, `markdown`, `text`. |
 | `orig_mime` | string |  | Original type when the upload was converted (e.g. `image/heic`). |
+| `position` | integer |  | Order within the collection. |
 | `slug` | string |  |  |
 | `slug_url` | string (uri) |  |  |
 | `source` | string |  |  |
@@ -306,11 +479,15 @@ An Item plus `snippet`, the line of text containing the first query word.
 | `view_count` | integer | yes |  |
 | `visibility` | string | yes | One of: `unlisted`, `private`. |
 | `charset` | string |  | Text: original charset when converted to UTF-8, e.g. `GBK`. |
+| `collection_id` | string |  |  |
+| `collection_url` | string (uri) |  |  |
 | `duration_ms` | integer |  | Video and audio length |
 | `filename` | string |  |  |
+| `forked_from` | string |  | ID of the item this one is a new version of. |
 | `height` | integer |  | Images: display height. |
 | `lang` | string |  | Text: language, e.g. `go`, `python`, `markdown`, `text`. |
 | `orig_mime` | string |  | Original type when the upload was converted (e.g. `image/heic`). |
+| `position` | integer |  | Order within the collection. |
 | `slug` | string |  |  |
 | `slug_url` | string (uri) |  |  |
 | `snippet` | string |  |  |
