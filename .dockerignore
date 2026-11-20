@@ -1,0 +1,5 @@
+.git
+private
+dist
+*.db*
+data

@@ -1,0 +1,107 @@
+# Release build: binaries, archives, .deb, multi-arch Docker image, Homebrew
+# formula. Publishing happens only from .github/workflows/release.yml, which
+# is switched off until the repository variable RELEASE_ENABLED is "true".
+#
+# Local dry run (nothing is published):
+#   goreleaser release --snapshot --clean
+version: 2
+project_name: tibi
+
+before:
+  hooks:
+    - go mod tidy
+    - go run ./tools/apidoc -check
+
+builds:
+  - id: tibi
+    main: ./cmd/tibi
+    binary: tibi
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X tibi/internal/app.Version={{ .Version }}"]
+    targets:
+      - linux_amd64
+      - linux_arm64
+      - darwin_arm64
+      - windows_amd64   # the client CLI (the server also runs, untested there)
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - CHANGELOG.md
+      - docs/*.md
+      - integrations/**/*
+      - src: packaging/server.toml
+        dst: server.example.toml
+
+checksum:
+  name_template: checksums.txt
+
+nfpms:
+  - id: deb
+    package_name: tibi
+    formats: [deb]
+    vendor: tibi
+    maintainer: tibi maintainers <noreply@users.noreply.github.com>
+    description: Self-hosted image host and pastebin — upload anything, get a link.
+    license: TBD
+    section: web
+    bindir: /usr/bin
+    recommends: [libvips-tools, libheif-plugin-libde265]
+    contents:
+      - src: packaging/systemd/tibi.service
+        dst: /lib/systemd/system/tibi.service
+        file_info: { mode: 0644 }
+      - src: packaging/server.toml
+        dst: /etc/tibi/server.toml
+        type: config|noreplace
+        file_info: { mode: 0640 }
+      - src: docs/DEPLOY.md
+        dst: /usr/share/doc/tibi/DEPLOY.md
+        file_info: { mode: 0644 }
+      - src: docs/CLIENTS.md
+        dst: /usr/share/doc/tibi/CLIENTS.md
+        file_info: { mode: 0644 }
+      - src: docs/API.md
+        dst: /usr/share/doc/tibi/API.md
+        file_info: { mode: 0644 }
+    scripts:
+      postinstall: packaging/deb/postinstall.sh
+      preremove: packaging/deb/preremove.sh
+      postremove: packaging/deb/postremove.sh
+
+dockers_v2:
+  - id: tibi
+    dockerfile: packaging/Dockerfile.release
+    images:
+      - "ghcr.io/{{ tolower .Env.GITHUB_REPOSITORY_OWNER }}/tibi"
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms: [linux/amd64, linux/arm64]
+    labels:
+      org.opencontainers.image.title: tibi
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+
+homebrew_casks:
+  - name: tibi
+    repository:
+      owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+      name: homebrew-tibi
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Casks
+    description: Self-hosted image host and pastebin — client and server
+    binaries: [tibi]
+
+release:
+  draft: true
+  prerelease: auto
+
+changelog:
+  disable: true   # CHANGELOG.md is the changelog

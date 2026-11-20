@@ -1,0 +1,34 @@
+[Unit]
+Description=tibi — self-hosted image host and pastebin
+Documentation=file:/usr/share/doc/tibi/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tibi
+Group=tibi
+# S3 credentials and other secrets: TIBI_S3_ACCESS_KEY=… in this file (mode 0600).
+EnvironmentFile=-/etc/tibi/env
+ExecStart=/usr/bin/tibi serve --config /etc/tibi/server.toml
+Restart=on-failure
+RestartSec=2s
+
+# Hardening: tibi only needs its data directory.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/tibi
+StateDirectory=tibi
+StateDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target

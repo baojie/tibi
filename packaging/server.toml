@@ -1,0 +1,15 @@
+# tibi server configuration. See /usr/share/doc/tibi/DEPLOY.md.
+# Every setting can be overridden with a TIBI_* environment variable,
+# e.g. in /etc/tibi/env (keep S3 keys there, not here).
+
+listen = "127.0.0.1:8070"
+base_url = "http://localhost:8070"   # the public URL behind your reverse proxy
+data_dir = "/var/lib/tibi"
+default_expires = "never"
+max_upload_bytes = 52428800
+blob_delivery = "proxy"              # proxy | redirect
+convert_heic = true
+heic_converter = "auto"              # vips, heif-convert or magick, if installed
+
+[storage]
+backend = "fs"                       # fs | s3
