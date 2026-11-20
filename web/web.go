@@ -12,3 +12,8 @@ var Templates embed.FS
 //
 //go:embed static
 var Static embed.FS
+
+// I18n holds the UI string catalogs, i18n/<locale>.toml.
+//
+//go:embed i18n/*.toml
+var I18n embed.FS
