@@ -31,6 +31,7 @@ type Server struct {
 	MaxItemBytesDay   int64    `toml:"max_item_bytes_per_day"`
 	MaxTotalBytesDay  int64    `toml:"max_total_bytes_per_day"`
 	DefaultLocale     string   `toml:"default_locale"`
+	SecretKeyFile     string   `toml:"secret_key_file"`
 	Storage           Storage  `toml:"storage"`
 }
 
@@ -158,6 +159,14 @@ func checkSecretsPerm(path string, c *Server) error {
 	return nil
 }
 
+// SecretKeyPath is the share-link signing key file (created on first start).
+func (c *Server) SecretKeyPath() string {
+	if c.SecretKeyFile != "" {
+		return c.SecretKeyFile
+	}
+	return filepath.Join(c.DataDir, "secret.key")
+}
+
 // RawBase is the origin used for raw URLs.
 func (c *Server) RawBase() string {
 	if c.RawBaseURL != "" {
@@ -183,6 +192,7 @@ func applyEnv(c *Server, getenv func(string) string) error {
 		"TIBI_DEFAULT_LOCALE":  &c.DefaultLocale,
 		"TIBI_BLOB_DELIVERY":   &c.BlobDelivery,
 		"TIBI_HEIC_CONVERTER":  &c.HEICConverter,
+		"TIBI_SECRET_KEY_FILE": &c.SecretKeyFile,
 	}
 	for k, p := range str {
 		if v, ok := lookup(getenv, k); ok {
