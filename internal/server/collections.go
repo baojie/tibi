@@ -48,6 +48,10 @@ func (s *Server) apiCollection(w http.ResponseWriter, r *http.Request) (*store.C
 		s.internal(w, "get collection", err)
 		return nil, false
 	}
+	if p := privateAccess(r); c.Visibility == store.Private && !p.All && c.TokenID != p.OwnToken {
+		apiError(w, http.StatusNotFound, "not_found", "no such collection")
+		return nil, false
+	}
 	return c, true
 }
 
@@ -61,7 +65,7 @@ func (s *Server) handleListCollections(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	cs, next, err := s.store.ListCollections(r.Context(), limit, r.URL.Query().Get("cursor"))
+	cs, next, err := s.store.ListCollections(r.Context(), limit, r.URL.Query().Get("cursor"), privateAccess(r))
 	if errors.Is(err, store.ErrBadCursor) {
 		apiError(w, http.StatusBadRequest, "bad_request", "invalid cursor")
 		return
@@ -90,7 +94,9 @@ func (s *Server) writeCollection(w http.ResponseWriter, r *http.Request, c *stor
 	j := s.collectionJSON(c)
 	j.Items = make([]ItemJSON, 0, len(items))
 	for _, it := range items {
-		j.Items = append(j.Items, s.itemJSON(it))
+		if canSee(r, it) { // someone else's private item in a shared collection
+			j.Items = append(j.Items, s.itemJSON(it))
+		}
 	}
 	writeJSON(w, status, j)
 }
@@ -133,7 +139,7 @@ func (s *Server) handleCreateCollection(w http.ResponseWriter, r *http.Request) 
 	members := make([]*store.Item, 0, len(body.Items))
 	for _, iid := range body.Items {
 		it, err := s.store.GetItem(ctx, iid)
-		if err != nil || !id.Valid(iid) {
+		if err != nil || !id.Valid(iid) || !canSee(r, it) {
 			apiError(w, http.StatusBadRequest, "bad_request", "no such item "+iid)
 			return
 		}
@@ -203,6 +209,10 @@ func (s *Server) handlePatchCollection(w http.ResponseWriter, r *http.Request) {
 				apiError(w, http.StatusBadRequest, "bad_request", err.Error())
 				return
 			}
+			if earlier(at, c.ExpiresAt) && !tokenFrom(r.Context()).Has(store.ScopeDelete) {
+				apiError(w, http.StatusForbidden, "forbidden", "making a collection expire sooner requires scope delete")
+				return
+			}
 			p.ExpiresAt = &at
 		}
 	}
@@ -222,11 +232,11 @@ func (s *Server) handlePatchCollection(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteCollection(w http.ResponseWriter, r *http.Request) {
-	cid := r.PathValue("id")
-	err := store.ErrNotFound
-	if id.Valid(cid) {
-		err = s.store.DeleteCollection(r.Context(), cid)
+	c, ok := s.apiCollection(w, r)
+	if !ok {
+		return
 	}
+	err := s.store.DeleteCollection(r.Context(), c.ID)
 	if errors.Is(err, store.ErrNotFound) {
 		apiError(w, http.StatusNotFound, "not_found", "no such collection")
 		return
@@ -283,6 +293,7 @@ func (s *Server) handleFork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer p.Close()
+	defer s.quotaLock(r)()
 	if msg := s.quotaError(r, p.Item.Size); msg != "" {
 		apiError(w, http.StatusRequestEntityTooLarge, "too_large", msg)
 		return

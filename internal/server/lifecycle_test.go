@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -368,13 +369,41 @@ func TestBurnConcurrentRevealAndKinds(t *testing.T) {
 		t.Fatalf("concurrent reveals: %v", codes)
 	}
 
-	// Image: inlined as a data URI so it survives its own deletion.
-	img := up(t, e, tok, "?burn_after_read=1", testimg.PNG(4, 4))
+	// Image: the reveal page points at a short-lived grant URL (the
+	// content is not inlined: that cost ~10× its size in server memory).
+	png := testimg.PNG(4, 4)
+	img := up(t, e, tok, "?burn_after_read=1", png)
 	resp, _ := http.Post(e.Srv.URL+"/"+img.ID+"/reveal", "", nil)
 	b, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if !strings.Contains(string(b), `src="data:image/png;base64,`) {
-		t.Fatal("burned image not inlined")
+	grant := regexp.MustCompile(`src="([^"]*/` + img.ID + `/burned/[A-Za-z0-9_-]+)"`).FindStringSubmatch(string(b))
+	if grant == nil || strings.Contains(string(b), "data:image") {
+		t.Fatalf("burned image page: %s", b)
+	}
+	if _, got := get(t, strings.Replace(grant[1], e.Cfg.BaseURL, e.Srv.URL, 1)); !bytes.Equal(got, png) {
+		t.Fatal("grant does not serve the image")
+	}
+	other := up(t, e, tok, "", []byte("x"))
+	tokPart := grant[1][strings.LastIndex(grant[1], "/")+1:]
+	for _, u := range []string{"/" + img.ID + "/burned/" + tokPart + "x", "/" + other.ID + "/burned/" + tokPart} {
+		if status(t, e.Srv.URL+u, "") != 404 {
+			t.Errorf("%s served", u)
+		}
+	}
+	e.Advance(11 * time.Minute)
+	if status(t, strings.Replace(grant[1], e.Cfg.BaseURL, e.Srv.URL, 1), "") != 404 {
+		t.Error("grant served after it expired")
+	}
+	// Another site cannot make a visitor's browser burn an item.
+	victim := up(t, e, tok, "?burn_after_read=1", []byte("keep"))
+	req, _ := http.NewRequest("POST", e.Srv.URL+"/"+victim.ID+"/reveal", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	if r, _ := http.DefaultClient.Do(req); r == nil || r.StatusCode != 403 {
+		t.Fatal("cross-site reveal accepted")
+	}
+	if status(t, victim.URL, "") != 200 {
+		t.Fatal("cross-site reveal burned the item")
 	}
 	// File: the reveal is the download.
 	bin := up(t, e, tok, "?burn_after_read=1&filename=key.bin", []byte{0, 1, 2, 3})
@@ -452,7 +481,7 @@ func TestListPagination(t *testing.T) {
 
 func TestPatchFields(t *testing.T) {
 	e := testutil.New(t, nil)
-	tok := e.Token("t")
+	tok := e.Token("t", "upload", "delete") // setting an expiry on a never-expiring item shortens it
 	it := up(t, e, tok, "?filename=x.txt", []byte("def f(): pass\n"))
 	code, b := api(t, e, tok, "PATCH", "/api/v1/items/"+it.ID, map[string]string{"title": "Notes", "lang": "py", "expires": "1h"})
 	var got fullItem
@@ -495,4 +524,97 @@ func TestShortExpiryNeverEarly(t *testing.T) {
 	if exp := time.Unix(*it.ExpiresAt, 0); exp.Before(before.Add(time.Second)) {
 		t.Fatalf("expires_at %v is less than 1s after upload at %v", exp, before)
 	}
+}
+
+// A token without read_private sees neither other tokens' private items
+// nor anything about them (security review, 0.1.0): not by list, search,
+// GET, share link, fork, PATCH, collections; and it cannot shorten an
+// expiry to get around the delete scope.
+func TestPrivateNeedsReadPrivate(t *testing.T) {
+	e := testutil.New(t, nil)
+	owner := e.Token("owner", "upload", "read_private")
+	phone := e.Token("phone") // upload only
+	secret := up(t, e, owner, "?visibility=private&filename=s.txt", []byte("password hunter2 zqsecret"))
+	public := up(t, e, owner, "?filename=p.txt", []byte("public zqsecret"))
+	mine := up(t, e, phone, "?visibility=private&filename=m.txt", []byte("phone private zqsecret"))
+
+	_, b := api(t, e, phone, "GET", "/api/v1/items?limit=100", nil)
+	if strings.Contains(string(b), secret.ID) || !strings.Contains(string(b), public.ID) || !strings.Contains(string(b), mine.ID) {
+		t.Fatalf("list: %s", b)
+	}
+	_, b = api(t, e, phone, "GET", "/api/v1/search?q=zqsecret", nil)
+	if strings.Contains(string(b), secret.ID) || strings.Contains(string(b), "hunter2") || !strings.Contains(string(b), mine.ID) {
+		t.Fatalf("search: %s", b)
+	}
+	for _, c := range []struct{ method, path string }{
+		{"GET", "/api/v1/items/" + secret.ID},
+		{"POST", "/api/v1/items/" + secret.ID + "/share-link"},
+		{"PATCH", "/api/v1/items/" + secret.ID},
+	} {
+		var body any
+		if c.method == "PATCH" {
+			body = map[string]string{"visibility": "unlisted"}
+		}
+		if code, b := api(t, e, phone, c.method, c.path, body); code != 404 {
+			t.Errorf("%s %s: %d %s", c.method, c.path, code, b)
+		}
+	}
+	if code, _ := forkReq(t, e, phone, secret.ID, "x"); code != 404 {
+		t.Errorf("fork of a private item: %d", code)
+	}
+	if code, _ := api(t, e, phone, "POST", "/api/v1/collections", map[string]any{"items": []string{secret.ID}}); code != 400 {
+		t.Errorf("gathering a private item: %d", code)
+	}
+	// Still private and alive.
+	if status(t, secret.URL, "") != 404 {
+		t.Fatal("private item became public")
+	}
+	// Own private items stay manageable; read_private sees everything.
+	if code, _ := api(t, e, phone, "GET", "/api/v1/items/"+mine.ID, nil); code != 200 {
+		t.Fatalf("own private item: %d", code)
+	}
+	if code, _ := api(t, e, owner, "GET", "/api/v1/items/"+mine.ID, nil); code != 200 {
+		t.Fatalf("read_private: %d", code)
+	}
+	// Shortening an expiry is deleting: needs scope delete. Extending is fine.
+	if code, b := api(t, e, phone, "PATCH", "/api/v1/items/"+public.ID, map[string]string{"expires": "1s"}); code != 403 {
+		t.Fatalf("shorten expiry without delete: %d %s", code, b)
+	}
+	if code, _ := api(t, e, phone, "PATCH", "/api/v1/items/"+mine.ID, map[string]string{"title": "renamed"}); code != 200 {
+		t.Fatal("ordinary patch refused")
+	}
+	deleter := e.Token("d", "upload", "delete")
+	if code, _ := api(t, e, deleter, "PATCH", "/api/v1/items/"+public.ID, map[string]string{"expires": "1h"}); code != 200 {
+		t.Fatal("shorten expiry with delete refused")
+	}
+	// Collections: a private one is invisible; a shared one hides others' private members.
+	_, cb := api(t, e, owner, "POST", "/api/v1/collections", map[string]any{"visibility": "private", "items": []string{secret.ID}})
+	var pc struct{ ID string }
+	json.Unmarshal(cb, &pc)
+	if code, _ := api(t, e, phone, "GET", "/api/v1/collections/"+pc.ID, nil); code != 404 {
+		t.Fatalf("private collection: %d", code)
+	}
+	if code, _ := api(t, e, deleter, "DELETE", "/api/v1/collections/"+pc.ID, nil); code != 404 {
+		t.Fatalf("delete of an invisible collection: %d", code)
+	}
+	_, lb := api(t, e, phone, "GET", "/api/v1/collections", nil)
+	if strings.Contains(string(lb), pc.ID) {
+		t.Fatal("private collection listed")
+	}
+	if code, _ := api(t, e, phone, "PATCH", "/api/v1/collections/"+pc.ID, map[string]string{"expires": "1s"}); code != 404 {
+		t.Fatalf("patch of an invisible collection: %d", code)
+	}
+}
+
+func forkReq(t *testing.T, e *testutil.Env, tok, itemID, body string) (int, []byte) {
+	t.Helper()
+	req, _ := http.NewRequest("POST", e.Srv.URL+"/api/v1/items/"+itemID+"/fork", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, b
 }

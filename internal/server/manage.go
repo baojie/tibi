@@ -29,6 +29,7 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 	items, next, err := s.store.ListItems(r.Context(), store.ListFilter{
 		Kind: q.Get("kind"), Source: q.Get("source"), Collection: q.Get("collection"), Limit: limit, Cursor: q.Get("cursor"),
+		Private: privateAccess(r),
 	})
 	if errors.Is(err, store.ErrBadCursor) {
 		apiError(w, http.StatusBadRequest, "bad_request", "invalid cursor")
@@ -49,7 +50,22 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": out, "next_cursor": nc})
 }
 
-// apiItem loads the live item named by the {id} path value (any visibility).
+// privateAccess: private items are for tokens with read_private, and for
+// the token that uploaded them. A leaked upload-only token (a phone, a
+// browser extension) must not open everybody's private items.
+func privateAccess(r *http.Request) store.PrivateAccess {
+	tok := tokenFrom(r.Context())
+	return store.PrivateAccess{All: tok.Has(store.ScopeReadPrivate), OwnToken: tok.ID}
+}
+
+// canSee reports whether the calling token may see the item at all.
+func canSee(r *http.Request, it *store.Item) bool {
+	p := privateAccess(r)
+	return it.Visibility != store.Private || p.All || it.TokenID == p.OwnToken
+}
+
+// apiItem loads the live item named by the {id} path value; private items
+// the token may not see answer 404, like ones that do not exist.
 func (s *Server) apiItem(w http.ResponseWriter, r *http.Request) (*store.Item, bool) {
 	itemID := r.PathValue("id")
 	if !id.Valid(itemID) {
@@ -65,6 +81,10 @@ func (s *Server) apiItem(w http.ResponseWriter, r *http.Request) (*store.Item, b
 		s.internal(w, "get item", err)
 		return nil, false
 	}
+	if !canSee(r, it) {
+		apiError(w, http.StatusNotFound, "not_found", "no such item")
+		return nil, false
+	}
 	return it, true
 }
 
@@ -75,9 +95,12 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteItem(w http.ResponseWriter, r *http.Request) {
-	itemID := r.PathValue("id")
-	err := s.store.DeleteItem(r.Context(), itemID)
-	if errors.Is(err, store.ErrNotFound) || !id.Valid(itemID) {
+	it, ok := s.apiItem(w, r)
+	if !ok {
+		return
+	}
+	err := s.store.DeleteItem(r.Context(), it.ID)
+	if errors.Is(err, store.ErrNotFound) {
 		apiError(w, http.StatusNotFound, "not_found", "no such item")
 		return
 	}
@@ -134,6 +157,12 @@ func (s *Server) handlePatchItem(w http.ResponseWriter, r *http.Request) {
 				apiError(w, http.StatusBadRequest, "bad_request", err.Error())
 				return
 			}
+			// Moving the expiry earlier deletes the item sooner: that is
+			// the delete scope's call, not upload's.
+			if earlier(at, it.ExpiresAt) && !tokenFrom(r.Context()).Has(store.ScopeDelete) {
+				apiError(w, http.StatusForbidden, "forbidden", "making an item expire sooner requires scope delete")
+				return
+			}
 			p.ExpiresAt = &at
 		case "slug":
 			v = strings.ToLower(v)
@@ -185,6 +214,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	hits, next, err := s.store.Search(r.Context(), store.SearchFilter{
 		Query: query, Kind: q.Get("kind"), Limit: limit, Cursor: q.Get("cursor"),
+		Private: privateAccess(r),
 	})
 	switch {
 	case errors.Is(err, store.ErrBadQuery), errors.Is(err, store.ErrBadCursor):
@@ -235,4 +265,12 @@ func (s *Server) handleShareLink(w http.ResponseWriter, r *http.Request) {
 		"url":        s.cfg.BaseURL + "/" + it.ID + "?" + s.signer.Query(it.ID, exp),
 		"expires_at": exp,
 	})
+}
+
+// earlier reports whether the new expiry (nil = never) comes before the old.
+func earlier(next, prev *int64) bool {
+	if next == nil {
+		return false
+	}
+	return prev == nil || *next < *prev
 }

@@ -240,6 +240,23 @@ type ListFilter struct {
 	Collection string
 	Limit      int
 	Cursor     string // opaque, from a previous page
+	Private    PrivateAccess
+}
+
+// PrivateAccess says which private items a listing may include: all of
+// them (a token with read_private), or only those uploaded by OwnToken.
+type PrivateAccess struct {
+	All      bool
+	OwnToken int64
+}
+
+// clause returns an SQL condition (with its argument) limiting private
+// items; col is the column prefix ("" or "i.").
+func (p PrivateAccess) clause(col string) (string, []any) {
+	if p.All {
+		return "", nil
+	}
+	return " AND (" + col + "visibility != 'private' OR " + col + "token_id = ?)", []any{p.OwnToken}
 }
 
 // ErrBadCursor is returned for malformed cursors.
@@ -282,6 +299,10 @@ func (s *Store) ListItems(ctx context.Context, f ListFilter) ([]*Item, string, e
 	if f.Collection != "" {
 		q += ` AND collection_id = ?`
 		args = append(args, f.Collection)
+	}
+	if c, a := f.Private.clause(""); c != "" {
+		q += c
+		args = append(args, a...)
 	}
 	if f.Cursor != "" {
 		ts, seq, err := decodeCursor(f.Cursor)

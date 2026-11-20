@@ -128,13 +128,17 @@ func (s *Store) NextPosition(ctx context.Context, cid string) (int, error) {
 }
 
 // ListCollections returns live collections, newest first.
-func (s *Store) ListCollections(ctx context.Context, limit int, cursor string) ([]*Collection, string, error) {
+func (s *Store) ListCollections(ctx context.Context, limit int, cursor string, priv PrivateAccess) ([]*Collection, string, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	now := s.Now().Unix()
 	q := `SELECT ` + collCols + `, c.rowid FROM collections c WHERE c.deleted_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > ?)`
 	args := []any{now, now}
+	if c, a := priv.clause("c."); c != "" {
+		q += c
+		args = append(args, a...)
+	}
 	if cursor != "" {
 		ts, seq, err := decodeCursor(cursor)
 		if err != nil {
