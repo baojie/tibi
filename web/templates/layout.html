@@ -1,5 +1,5 @@
 {{define "layout"}}<!doctype html>
-<html lang="en">
+<html lang="{{lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,18 +7,35 @@
 <title>{{.Title}} · tibi</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/chroma.css">
+{{with .OG}}
+<meta property="og:site_name" content="tibi">
+<meta property="og:type" content="{{.Type}}">
+<meta property="og:title" content="{{.Title}}">
+<meta property="og:url" content="{{.URL}}">
+{{with .Description}}<meta property="og:description" content="{{.}}">
+<meta name="description" content="{{.}}">{{end}}
+{{with .Image}}<meta property="og:image" content="{{.}}">{{end}}
+{{if .ImageWidth}}<meta property="og:image:width" content="{{.ImageWidth}}">
+<meta property="og:image:height" content="{{.ImageHeight}}">{{end}}
+{{with .Video}}<meta property="og:video" content="{{.}}">
+<meta property="og:video:type" content="{{$.OG.VideoType}}">{{end}}
+<meta name="twitter:card" content="{{.Card}}">
+<meta name="twitter:title" content="{{.Title}}">
+{{with .Image}}<meta name="twitter:image" content="{{.}}">{{end}}
+{{end}}
 </head>
-<body>
-<header><span class="brand">tibi</span></header>
+<body data-i18n="{{jsI18n}}">
+<header><span class="brand">tibi</span><nav class="owner-nav" hidden><a href="/upload">{{t "nav.upload"}}</a><a href="/recent">{{t "nav.recent"}}</a></nav></header>
 <main>{{template "content" .}}</main>
+<script src="/static/nav.js" defer></script>
 </body>
 </html>{{end}}
 
 {{define "notices"}}
-{{if .Burned}}<p class="notice">This item has been deleted from the server. It cannot be opened again — save or copy it now if you need it.</p>
-{{else if .Item.BurnAfterRead}}<p class="notice">Burn after reading: this item will be deleted when someone without a token opens it.</p>{{end}}
-{{with .Expires}}<p class="notice muted">Expires {{.}}.</p>{{end}}
-{{with .Item.ForkedFrom}}<p class="notice muted">Forked from <a href="/{{.}}">{{.}}</a>.</p>{{end}}
-{{with .Item.CollectionID}}<p class="notice muted">Part of <a href="/c/{{.}}">a collection</a>.</p>{{end}}
-{{if eq .Item.Visibility "private"}}<p class="notice muted">Private: visible only with a token that can read private items.</p>{{end}}
+{{if .Burned}}<p class="notice">{{t "notice.burned"}}</p>
+{{else if .Item.BurnAfterRead}}<p class="notice">{{t "notice.burn"}}</p>{{end}}
+{{with .Expires}}<p class="notice muted">{{t "notice.expires" .}}</p>{{end}}
+{{with .Item.ForkedFrom}}<p class="notice muted">{{t "notice.forked_from"}} <a href="/{{.}}">{{.}}</a>.</p>{{end}}
+{{with .Item.CollectionID}}<p class="notice muted">{{t "notice.part_of"}} <a href="/c/{{.}}">{{t "notice.a_collection"}}</a>.</p>{{end}}
+{{if eq .Item.Visibility "private"}}<p class="notice muted">{{t "notice.private"}}</p>{{end}}
 {{end}}

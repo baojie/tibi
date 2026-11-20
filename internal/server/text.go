@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"tibi/internal/blob"
 	"tibi/internal/render"
@@ -23,6 +24,7 @@ type textView struct {
 	LangName   string
 	Truncated  bool
 	ShownSize  string
+	Preview    string // plain start of the text, for link previews
 }
 
 // loadTextView renders a text item. Burned items are not cached, so their
@@ -57,6 +59,7 @@ func (s *Server) loadTextBlock(ctx context.Context, it *store.Item, cache bool, 
 		tv.ShownSize = units.FormatBytes(int64(len(data)))
 	}
 	tv.Code, tv.Lines = render.CodeBlock(string(data), it.Lang, prefix)
+	tv.Preview = preview(data, 280)
 	if it.Lang == render.Markdown && !tv.Truncated {
 		if html, err := render.RenderMarkdown(data); err == nil {
 			tv.Rendered, tv.IsMarkdown = html, true
@@ -86,4 +89,18 @@ func (s *Server) markdownOf(r *http.Request, it *store.Item) (template.HTML, err
 		return "", err
 	}
 	return render.RenderMarkdown(data)
+}
+
+// preview returns about n characters from the start of text, whitespace
+// collapsed, cut at a rune boundary.
+func preview(data []byte, n int) string {
+	if len(data) > 4*n {
+		data = data[:4*n]
+	}
+	f := strings.Fields(strings.ToValidUTF8(string(data), ""))
+	s := strings.Join(f, " ")
+	if r := []rune(s); len(r) > n {
+		s = string(r[:n]) + "…"
+	}
+	return s
 }

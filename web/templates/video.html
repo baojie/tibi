@@ -3,16 +3,16 @@
   <video class="player" controls preload="metadata" src="{{.EmbedURL}}"{{with .Item.Width}} width="{{.}}"{{end}}></video>
   <h1>{{.Title}}</h1>
   <dl class="meta">
-    {{with .Duration}}<dt>Length</dt><dd>{{.}}</dd>{{end}}
-    <dt>Size</dt><dd>{{.Size}}</dd>
-    <dt>Type</dt><dd>{{.Item.Mime}}</dd>
+    {{with .Duration}}<dt>{{t "meta.length"}}</dt><dd>{{.}}</dd>{{end}}
+    <dt>{{t "meta.size"}}</dt><dd>{{.Size}}</dd>
+    <dt>{{t "meta.type"}}</dt><dd>{{.Item.Mime}}</dd>
   </dl>
   {{template "notices" .}}
   <div class="copy-rows">
-    <label>Link<input readonly value="{{.URL}}"></label><button type="button" class="button secondary" data-copy="{{.URL}}">Copy</button>
-    <label>Direct<input readonly value="{{.EmbedURL}}"></label><button type="button" class="button secondary" data-copy="{{.EmbedURL}}">Copy</button>
+    <label>{{t "label.link"}}<input readonly value="{{.URL}}"></label><button type="button" class="button secondary" data-copy="{{.URL}}">{{t "action.copy"}}</button>
+    <label>{{t "label.direct"}}<input readonly value="{{.EmbedURL}}"></label><button type="button" class="button secondary" data-copy="{{.EmbedURL}}">{{t "action.copy"}}</button>
   </div>
-  <p class="actions"><a class="button" href="{{.DownloadURL}}">Download</a></p>
+  <p class="actions"><a class="button" href="{{.DownloadURL}}">{{t "action.download"}}</a></p>
 </section>
 <script src="/static/copy.js" defer></script>
 {{end}}

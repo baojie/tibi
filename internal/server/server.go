@@ -14,8 +14,10 @@ import (
 	"tibi/api"
 	"tibi/internal/blob"
 	"tibi/internal/config"
+	"tibi/internal/i18n"
 	"tibi/internal/ingest"
 	"tibi/internal/render"
+	"tibi/internal/sign"
 	"tibi/internal/store"
 	"tibi/web"
 )
@@ -26,10 +28,12 @@ type Server struct {
 	store   *store.Store
 	blobs   blob.Store
 	ingest  *ingest.Pipeline
-	pages   map[string]*template.Template
+	pages   map[string]map[string]*template.Template // locale → page
+	i18n    *i18n.Catalog
 	tempDir string
 	// renderCache holds rendered text views (content is immutable).
 	renderCache *render.Cache
+	signer      *sign.Signer
 	chromaCSS   []byte
 	log         *slog.Logger
 	mux         *http.ServeMux
@@ -40,13 +44,22 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 	if log == nil {
 		log = slog.Default()
 	}
-	pages := map[string]*template.Template{}
-	for _, name := range []string{"file", "image", "text", "burn", "video", "audio", "collection"} {
-		t, err := template.ParseFS(web.Templates, "templates/layout.html", "templates/"+name+".html")
-		if err != nil {
-			return nil, err
+	cat, err := i18n.Load(web.I18n, "i18n")
+	if err != nil {
+		return nil, err
+	}
+	// One compiled template set per locale, so "t" needs no per-request work.
+	pages := map[string]map[string]*template.Template{}
+	for _, loc := range cat.Locales() {
+		pages[loc] = map[string]*template.Template{}
+		for _, name := range pageNames {
+			t, err := template.New("").Funcs(templateFuncs(cat, loc)).
+				ParseFS(web.Templates, "templates/layout.html", "templates/"+name+".html")
+			if err != nil {
+				return nil, err
+			}
+			pages[loc][name] = t
 		}
-		pages[name] = t
 	}
 	var heic *ingest.Converter
 	if cfg.ConvertHEIC {
@@ -60,6 +73,10 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		}
 		heic = c
 	}
+	signer, err := sign.LoadOrCreate(cfg.SecretKeyPath())
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{
 		cfg:   cfg,
 		store: st,
@@ -69,7 +86,9 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		tempDir:     tempDir,
 		renderCache: render.NewCache(64 << 20),
 		chromaCSS:   render.CSS(),
+		signer:      signer,
 		pages:       pages,
+		i18n:        cat,
 		log:         log,
 		mux:         http.NewServeMux(),
 	}
@@ -89,6 +108,7 @@ func (s *Server) routes() {
 	m.Handle("GET /api/v1/whoami", s.auth("", http.HandlerFunc(s.handleWhoami)))
 	m.Handle("POST /api/v1/items", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleUpload)))
 	m.Handle("GET /api/v1/items", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleList)))
+	m.Handle("POST /api/v1/items/{id}/share-link", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleShareLink)))
 	m.Handle("POST /api/v1/items/{id}/fork", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleFork)))
 	m.Handle("POST /api/v1/collections", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleCreateCollection)))
 	m.Handle("GET /api/v1/collections", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleListCollections)))
@@ -105,6 +125,8 @@ func (s *Server) routes() {
 
 	m.HandleFunc("GET /{$}", s.handleIndex)
 	m.HandleFunc("GET /s/{slug}", s.handleSlug)
+	m.HandleFunc("GET /upload", s.handleOwnerPage("upload", "upload.title"))
+	m.HandleFunc("GET /recent", s.handleOwnerPage("recent", "recent.title"))
 	// Item routes (/{id}, /{id}.{ext}, /{id}/raw, /{id}/dl) are dispatched by
 	// hand: wildcard patterns would conflict with the /static/ and /api/ prefixes.
 	m.HandleFunc("/", s.handleItemRoutes)

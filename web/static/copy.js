@@ -5,7 +5,9 @@ document.addEventListener("click", function (e) {
   var text = b.getAttribute("data-copy");
   var done = function () {
     var old = b.textContent;
-    b.textContent = "Copied";
+    var msgs = {};
+    try { msgs = JSON.parse(document.body.getAttribute("data-i18n") || "{}"); } catch (e) {}
+    b.textContent = msgs["action.copied"] || "Copied";
     setTimeout(function () { b.textContent = old; }, 1200);
   };
   if (navigator.clipboard && window.isSecureContext) {

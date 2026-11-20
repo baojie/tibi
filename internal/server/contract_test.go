@@ -25,6 +25,7 @@ func TestAuthErrorsEveryOperation(t *testing.T) {
 		{"DELETE", "/api/v1/items/" + it.ID, nil},
 		{"GET", "/api/v1/search?q=x", nil},
 		{"POST", "/api/v1/items/" + it.ID + "/fork", "new"},
+		{"POST", "/api/v1/items/" + it.ID + "/share-link", nil},
 		{"POST", "/api/v1/collections", map[string]string{}},
 		{"GET", "/api/v1/collections", nil},
 		{"GET", "/api/v1/collections/" + it.ID, nil},

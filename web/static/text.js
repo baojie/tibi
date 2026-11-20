@@ -2,6 +2,9 @@
 // toggle, copy-all and the Markdown rendered/source tabs. No inline scripts.
 (function () {
   "use strict";
+  var msgs = {};
+  try { msgs = JSON.parse(document.body.getAttribute("data-i18n") || "{}"); } catch (e) {}
+  function t(k, a) { return (msgs[k] || k).replace("%s", a || ""); }
 
   function store(k, v) {
     try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; }
@@ -84,7 +87,7 @@
         return navigator.clipboard.writeText(t);
       }).then(function () {
         var old = b.textContent;
-        b.textContent = "Copied";
+        b.textContent = t("action.copied");
         setTimeout(function () { b.textContent = old; }, 1200);
       });
     });
@@ -96,6 +99,9 @@
 // POST /api/v1/items/{id}/fork; the original never changes.
 (function () {
   "use strict";
+  var msgs = {};
+  try { msgs = JSON.parse(document.body.getAttribute("data-i18n") || "{}"); } catch (e) {}
+  function t(k, a) { return (msgs[k] || k).replace("%s", a || ""); }
   var btn = document.getElementById("fork-button");
   var form = document.getElementById("fork-editor");
   if (!btn || !form) return;
@@ -116,7 +122,7 @@
   document.getElementById("fork-cancel").addEventListener("click", function () { form.hidden = true; });
   form.addEventListener("submit", function (e) {
     e.preventDefault();
-    status.textContent = "Saving…";
+    status.textContent = t("fork.saving");
     fetch(btn.getAttribute("data-fork"), {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "text/plain; charset=utf-8" },
@@ -126,6 +132,6 @@
         if (!r.ok) throw new Error((j.error && j.error.message) || r.statusText);
         location.href = j.url;
       });
-    }).catch(function (err) { status.textContent = "Failed: " + err.message; });
+    }).catch(function (err) { status.textContent = t("fork.failed", err.message); });
   });
 })();

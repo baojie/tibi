@@ -1,0 +1,20 @@
+{{define "content"}}
+<section class="item owner-page" id="recent-page">
+  <h1>{{t "recent.title"}}</h1>
+  <p class="muted" id="need-token" hidden><a href="/upload">{{t "token.title"}}</a></p>
+  <div id="recent" hidden>
+    <form id="search-form" class="row">
+      <input type="search" name="q" placeholder="{{t "recent.search"}}">
+      <button type="submit" class="button secondary">{{t "recent.search"}}</button>
+      <span class="spacer"></span>
+      <label><input type="checkbox" id="select-all"> {{t "recent.select_all"}}</label>
+      <button type="button" class="button" id="delete-selected" disabled>{{t "recent.delete_selected"}}</button>
+    </form>
+    <p id="recent-status" class="muted" aria-live="polite"></p>
+    <ul id="items" class="item-list"></ul>
+    <p><button type="button" class="button secondary" id="load-more" hidden>{{t "recent.load_more"}}</button></p>
+  </div>
+</section>
+<script src="/static/i18n.js" defer></script>
+<script src="/static/recent.js" defer></script>
+{{end}}

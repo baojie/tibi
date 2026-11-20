@@ -1,9 +1,9 @@
 {{define "content"}}
 <section class="item item-collection">
   <h1>{{.Title}}</h1>
-  <p class="sub"><span>{{len .Entries}} {{if eq (len .Entries) 1}}item{{else}}items{{end}}</span>{{if eq .Coll.Visibility "private"}}<span>private</span>{{end}}</p>
+  <p class="sub"><span>{{tn "meta.items" (len .Entries)}}</span>{{if eq .Coll.Visibility "private"}}<span>{{t "meta.private"}}</span>{{end}}</p>
   <div class="copy-rows">
-    <label>Link<input readonly value="{{.URL}}"></label><button type="button" class="button secondary" data-copy="{{.URL}}">Copy</button>
+    <label>{{t "label.link"}}<input readonly value="{{.URL}}"></label><button type="button" class="button secondary" data-copy="{{.URL}}">{{t "action.copy"}}</button>
   </div>
   {{if .Grid}}
   <div class="grid">
@@ -14,18 +14,18 @@
   {{else}}
   {{range .Entries}}
   <article class="entry" id="{{.Anchor}}">
-    <header class="entry-head">
+    <div class="entry-head">
       <a class="entry-name" href="{{.URL}}">{{.Name}}</a>
       <span class="sub"><span>{{.Size}}</span>{{if .Text}}<span>{{.Text.LangName}}</span>{{end}}</span>
       <span class="spacer"></span>
-      <a class="button secondary" href="{{.DownloadURL}}">Download</a>
-    </header>
+      <a class="button secondary" href="{{.DownloadURL}}">{{t "action.download"}}</a>
+    </div>
     {{if eq .Item.Kind "image"}}<figure class="image"><a href="{{.URL}}"><img src="{{.EmbedURL}}" alt="{{.Name}}" loading="lazy"></a></figure>
     {{else if eq .Item.Kind "video"}}<video class="player" controls preload="metadata" src="{{.EmbedURL}}"></video>
     {{else if eq .Item.Kind "audio"}}<audio class="player" controls preload="metadata" src="{{.EmbedURL}}"></audio>
     {{else if .Text}}{{if .Text.IsMarkdown}}<div class="markdown">{{.Text.Rendered}}</div>{{else}}{{.Text.Code}}{{end}}
-      {{if .Text.Truncated}}<p class="notice">Showing the first {{.Text.ShownSize}}. <a href="{{.URL}}">Open the item</a> for the full text.</p>{{end}}
-    {{else}}<p class="notice muted">{{.Item.Mime}} file — <a href="{{.DownloadURL}}">download</a></p>{{end}}
+      {{if .Text.Truncated}}<p class="notice">{{t "text.collection_truncated" .Text.ShownSize}} <a href="{{.URL}}">{{t "action.open_item"}}</a> {{t "text.collection_full"}}</p>{{end}}
+    {{else}}<p class="notice muted">{{t "notice.file_download" .Item.Mime}} — <a href="{{.DownloadURL}}">{{t "action.download"}}</a></p>{{end}}
   </article>
   {{end}}
   {{end}}

@@ -5,18 +5,18 @@
   </figure>
   <h1>{{.Title}}</h1>
   <dl class="meta">
-    {{if .Item.Width}}<dt>Size</dt><dd>{{.Item.Width}} × {{.Item.Height}} · {{.Size}}</dd>{{else}}<dt>Size</dt><dd>{{.Size}}</dd>{{end}}
-    <dt>Type</dt><dd>{{.Item.Mime}}{{with .Item.OrigMime}} (converted from {{.}}){{end}}</dd>
+    {{if .Item.Width}}<dt>{{t "meta.size"}}</dt><dd>{{.Item.Width}} × {{.Item.Height}} · {{.Size}}</dd>{{else}}<dt>{{t "meta.size"}}</dt><dd>{{.Size}}</dd>{{end}}
+    <dt>{{t "meta.type"}}</dt><dd>{{.Item.Mime}}{{with .Item.OrigMime}} ({{t "meta.converted_from" .}}){{end}}</dd>
   </dl>
   {{template "notices" .}}
   {{if not .Burned}}
   <div class="copy-rows">
-    <label>Link<input readonly value="{{.URL}}"></label><button type="button" class="button secondary" data-copy="{{.URL}}">Copy</button>
-    <label>Direct<input readonly value="{{.EmbedURL}}"></label><button type="button" class="button secondary" data-copy="{{.EmbedURL}}">Copy</button>
-    <label>Markdown<input readonly value="{{.Markdown}}"></label><button type="button" class="button secondary" data-copy="{{.Markdown}}">Copy</button>
+    <label>{{t "label.link"}}<input readonly value="{{.URL}}"></label><button type="button" class="button secondary" data-copy="{{.URL}}">{{t "action.copy"}}</button>
+    <label>{{t "label.direct"}}<input readonly value="{{.EmbedURL}}"></label><button type="button" class="button secondary" data-copy="{{.EmbedURL}}">{{t "action.copy"}}</button>
+    <label>{{t "label.markdown"}}<input readonly value="{{.Markdown}}"></label><button type="button" class="button secondary" data-copy="{{.Markdown}}">{{t "action.copy"}}</button>
   </div>
   <p class="actions">
-    <a class="button" href="{{.DownloadURL}}">Download</a>
+    <a class="button" href="{{.DownloadURL}}">{{t "action.download"}}</a>
   </p>
   {{end}}
 </section>

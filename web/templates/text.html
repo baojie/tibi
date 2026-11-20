@@ -4,35 +4,35 @@
     <h1>{{.Title}}</h1>
     <p class="sub">
       <span>{{.Text.LangName}}</span>
-      <span>{{.Text.Lines}} {{if eq .Text.Lines 1}}line{{else}}lines{{end}}</span>
+      <span>{{tn "meta.lines" .Text.Lines}}</span>
       <span>{{.Size}}</span>
-      {{with .Item.Charset}}<span title="The original bytes were converted to UTF-8">converted from {{.}}</span>{{end}}
+      {{with .Item.Charset}}<span title="{{t "meta.charset_title"}}">{{t "meta.converted_from" .}}</span>{{end}}
     </p>
   </div>
   <div class="toolbar">
     {{if .Text.IsMarkdown}}
     <span class="tabs" role="tablist">
-      <button type="button" class="tab active" data-view="rendered" role="tab" aria-selected="true">Rendered</button>
-      <button type="button" class="tab" data-view="source" role="tab" aria-selected="false">Source</button>
+      <button type="button" class="tab active" data-view="rendered" role="tab" aria-selected="true">{{t "tab.rendered"}}</button>
+      <button type="button" class="tab" data-view="source" role="tab" aria-selected="false">{{t "tab.source"}}</button>
     </span>
     {{end}}
     <span class="spacer"></span>
-    <button type="button" class="button secondary" id="wrap-toggle" aria-pressed="false">Wrap</button>
+    <button type="button" class="button secondary" id="wrap-toggle" aria-pressed="false">{{t "action.wrap"}}</button>
     {{if not .Burned}}
-    <button type="button" class="button secondary" data-copy-url="{{.LocalRaw}}">Copy</button>
-    <button type="button" class="button secondary" id="fork-button" hidden data-raw="{{.LocalRaw}}" data-fork="/api/v1/items/{{.Item.ID}}/fork">Fork</button>
-    <a class="button secondary" href="{{.RawURL}}" rel="nofollow">Raw</a>
-    <a class="button secondary" href="{{.DownloadURL}}">Download</a>
+    <button type="button" class="button secondary" data-copy-url="{{.LocalRaw}}">{{t "action.copy"}}</button>
+    <button type="button" class="button secondary" id="fork-button" hidden data-raw="{{.LocalRaw}}" data-fork="/api/v1/items/{{.Item.ID}}/fork">{{t "action.fork"}}</button>
+    <a class="button secondary" href="{{.RawURL}}" rel="nofollow">{{t "action.raw"}}</a>
+    <a class="button secondary" href="{{.DownloadURL}}">{{t "action.download"}}</a>
     {{end}}
   </div>
   {{template "notices" .}}
   {{if .Text.Truncated}}
-  <p class="notice">This text is {{.Size}}; showing the first {{.Text.ShownSize}} ({{.Text.Lines}} lines). <a href="{{.RawURL}}" rel="nofollow">View the full raw text</a>.</p>
+  <p class="notice">{{t "text.truncated" .Size .Text.ShownSize (tn "meta.lines" .Text.Lines)}} <a href="{{.RawURL}}" rel="nofollow">{{t "text.view_full"}}</a>.</p>
   {{end}}
   <form class="fork-editor" id="fork-editor" hidden>
-    <p class="notice muted">Content is immutable: saving creates a new item that links back to this one.</p>
-    <textarea name="text" spellcheck="false" aria-label="New version"></textarea>
-    <p class="actions"><button type="submit" class="button">Save as new version</button> <button type="button" class="button secondary" id="fork-cancel">Cancel</button> <span id="fork-status"></span></p>
+    <p class="notice muted">{{t "fork.note"}}</p>
+    <textarea name="text" spellcheck="false" aria-label="{{t "fork.textarea"}}"></textarea>
+    <p class="actions"><button type="submit" class="button">{{t "fork.save"}}</button> <button type="button" class="button secondary" id="fork-cancel">{{t "action.cancel"}}</button> <span id="fork-status"></span></p>
   </form>
   {{if .Text.IsMarkdown}}
   <article class="markdown" id="view-rendered">{{.Text.Rendered}}</article>

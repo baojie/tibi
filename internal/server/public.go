@@ -73,10 +73,10 @@ func (s *Server) handleItemOrRaw(w http.ResponseWriter, r *http.Request, name st
 		return
 	}
 	if it.BurnAfterRead && !acc.privileged {
-		s.renderBurnNotice(w, it)
+		s.renderBurnNotice(w, r, it)
 		return
 	}
-	s.renderView(w, r, it, viewOpts{})
+	s.renderView(w, r, it, viewOpts{signQuery: acc.signQuery})
 }
 
 func (s *Server) handleRaw(w http.ResponseWriter, r *http.Request, itemID string) {
@@ -138,6 +138,10 @@ type access struct {
 	// privileged requests carry a token with read_private: they see private
 	// items, and burn-after-read items without consuming them.
 	privileged bool
+	// signQuery is "exp=…&sig=…" when the request carries a valid share
+	// link signature for the item: it may see that (private) item, and the
+	// page's raw/download links carry the same signature.
+	signQuery string
 }
 
 func (s *Server) requestAccess(r *http.Request) access {
@@ -167,7 +171,10 @@ func (s *Server) lookup(r *http.Request, itemID string) (*store.Item, access, er
 	if it.Visibility == store.Private || it.BurnAfterRead {
 		acc = s.requestAccess(r)
 	}
-	if it.Visibility == store.Private && !acc.privileged {
+	if q := r.URL.Query(); q.Get("sig") != "" && s.signer.Valid(it.ID, q.Get("exp"), q.Get("sig"), s.store.Now().Unix()) {
+		acc.signQuery = "exp=" + q.Get("exp") + "&sig=" + q.Get("sig")
+	}
+	if it.Visibility == store.Private && !acc.privileged && acc.signQuery == "" {
 		return nil, acc, store.ErrNotFound
 	}
 	return it, acc, nil
@@ -375,10 +382,65 @@ type viewModel struct {
 	// Burned is set when a burn-after-read item is shown on reveal: it is
 	// already deleted, so no raw/download links are offered.
 	Burned bool
+	// OG holds link-preview (OpenGraph/Twitter) tags; nil when the item
+	// must not be previewed.
+	OG *ogMeta
+}
+
+// ogMeta is what chat apps show when a link is pasted.
+type ogMeta struct {
+	Type        string // website | video.other | music.song
+	Title       string
+	Description string
+	URL         string
+	Image       string
+	ImageWidth  int
+	ImageHeight int
+	Video       string
+	VideoType   string
+	Card        string // summary | summary_large_image
+}
+
+// ogImageMax is the largest original image offered as og:image; bigger
+// ones (and WebP/AVIF, which some unfurlers reject) use the thumbnail.
+const ogImageMax = 5 << 20
+
+// openGraph builds preview tags. Private, burn-after-read and encrypted
+// items never get any (PLAN A6): a preview would leak their content.
+func (s *Server) openGraph(it *store.Item, j ItemJSON, title string, tv *textView) *ogMeta {
+	if it.Visibility != store.Unlisted || it.BurnAfterRead || it.Kind == store.KindEncrypted {
+		return nil
+	}
+	og := &ogMeta{Type: "website", Title: title, URL: j.URL, Card: "summary"}
+	switch it.Kind {
+	case store.KindImage:
+		og.Card = "summary_large_image"
+		switch {
+		case it.Size <= ogImageMax && (it.Mime == "image/png" || it.Mime == "image/jpeg" || it.Mime == "image/gif"):
+			og.Image = j.RawURL
+			if it.Width != nil {
+				og.ImageWidth, og.ImageHeight = *it.Width, *it.Height
+			}
+		case j.ThumbnailURL != "":
+			og.Image = j.ThumbnailURL
+		}
+	case store.KindVideo:
+		og.Type, og.Video, og.VideoType = "video.other", j.RawURL, it.Mime
+	case store.KindAudio:
+		og.Type = "music.song"
+	case store.KindText:
+		if tv != nil {
+			og.Description = tv.Preview
+		}
+	default:
+		og.Description = it.Mime + ", " + units.FormatBytes(it.Size)
+	}
+	return og
 }
 
 type viewOpts struct {
-	burned bool
+	burned    bool
+	signQuery string // appended to raw/download/thumb links (signed share links)
 }
 
 func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.Item, o viewOpts) {
@@ -401,6 +463,13 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 	}
 	if it.DurationMS != nil {
 		vm.Duration = formatDuration(*it.DurationMS)
+	}
+	if q := o.signQuery; q != "" {
+		vm.RawURL += "?" + q
+		vm.LocalRaw += "?" + q
+		vm.DownloadURL += "?" + q
+		vm.EmbedURL = template.URL(string(vm.EmbedURL) + "?" + q)
+		vm.URL += "?" + q
 	}
 	if it.ExpiresAt != nil {
 		vm.Expires = time.Unix(*it.ExpiresAt, 0).UTC().Format("2006-01-02 15:04 UTC")
@@ -430,18 +499,24 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 		vm.Text = tv
 		page = "text"
 	}
-	s.writePage(w, page, vm, it.Visibility == store.Private || it.BurnAfterRead)
+	if !o.burned && o.signQuery == "" {
+		vm.OG = s.openGraph(it, j, title, vm.Text)
+	}
+	s.writePage(w, r, page, vm, it.Visibility == store.Private || it.BurnAfterRead)
 }
 
-func (s *Server) writePage(w http.ResponseWriter, page string, vm any, noStore bool) {
+func (s *Server) writePage(w http.ResponseWriter, r *http.Request, page string, vm any, noStore bool) {
 	var buf bytes.Buffer
-	if err := s.pages[page].ExecuteTemplate(&buf, "layout", vm); err != nil {
+	loc := s.locale(r)
+	if err := s.pages[loc][page].ExecuteTemplate(&buf, "layout", vm); err != nil {
 		s.log.Error("render", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Content-Language", loc)
+	h.Add("Vary", "Accept-Language")
 	h.Set("Content-Security-Policy", s.viewCSP())
 	h.Set("X-Frame-Options", "DENY")
 	if noStore {
@@ -468,12 +543,13 @@ func (s *Server) dataURI(r *http.Request, it *store.Item) (template.URL, error) 
 
 // renderBurnNotice is the interstitial for burn-after-read items: link
 // previewers that GET the page see only this; the reveal is a POST.
-func (s *Server) renderBurnNotice(w http.ResponseWriter, it *store.Item) {
-	s.writePage(w, "burn", struct {
+func (s *Server) renderBurnNotice(w http.ResponseWriter, r *http.Request, it *store.Item) {
+	s.writePage(w, r, "burn", struct {
+		OG     *ogMeta // always nil: a burn item is never previewed
 		Title  string
 		Action string
 		Kind   string
-	}{"Burn after reading", "/" + it.ID + "/reveal", it.Kind}, true)
+	}{nil, s.i18n.T(s.locale(r), "page.burn.title"), "/" + it.ID + "/reveal", it.Kind}, true)
 }
 
 func formatDuration(ms int64) string {
@@ -490,6 +566,6 @@ func (s *Server) viewCSP() string {
 	if raw := s.cfg.RawBaseURL; raw != "" && raw != s.cfg.BaseURL {
 		src += " " + raw
 	}
-	return "default-src 'self'; img-src " + src + " data:; media-src " + src + "; connect-src " + src +
+	return "default-src 'self'; img-src " + src + " data: blob:; media-src " + src + "; connect-src " + src +
 		"; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 }

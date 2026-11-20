@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"tibi/internal/id"
 	"tibi/internal/render"
 	"tibi/internal/store"
+	"tibi/internal/units"
 )
 
 // handleList serves GET /api/v1/items?limit&cursor&kind&source.
@@ -204,4 +206,33 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		nc = &next
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out, "next_cursor": nc})
+}
+
+// maxShareTTL bounds signed share links.
+const maxShareTTL = 365 * 24 * time.Hour
+
+// handleShareLink returns a signed, time-limited URL for an item, typically
+// a private one: whoever has the link can view it until it expires.
+func (s *Server) handleShareLink(w http.ResponseWriter, r *http.Request) {
+	it, ok := s.apiItem(w, r)
+	if !ok {
+		return
+	}
+	ttl := time.Hour
+	if v := r.URL.Query().Get("ttl"); v != "" {
+		d, never, err := units.ParseExpiry(v)
+		if err != nil || never || d > maxShareTTL {
+			apiError(w, http.StatusBadRequest, "bad_request", "ttl must be a duration such as 10m, 1h or 7d, at most 365d")
+			return
+		}
+		ttl = d
+	}
+	exp := s.store.Now().Add(ttl).Unix()
+	if it.ExpiresAt != nil && *it.ExpiresAt < exp {
+		exp = *it.ExpiresAt // the link cannot outlive the item
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"url":        s.cfg.BaseURL + "/" + it.ID + "?" + s.signer.Query(it.ID, exp),
+		"expires_at": exp,
+	})
 }

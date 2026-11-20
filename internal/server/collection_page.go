@@ -25,6 +25,7 @@ type collEntry struct {
 }
 
 type collView struct {
+	OG      *ogMeta
 	Title   string
 	Coll    *store.Collection
 	URL     string
@@ -60,7 +61,7 @@ func (s *Server) handleCollectionPage(w http.ResponseWriter, r *http.Request, ci
 	}
 	vm := collView{Title: c.Title, Coll: c, URL: s.cfg.BaseURL + "/c/" + c.ID, Grid: true}
 	if vm.Title == "" {
-		vm.Title = strconv.Itoa(c.ItemCount) + " items"
+		vm.Title = s.i18n.T(s.locale(r), "page.untitled_items", c.ItemCount)
 	}
 	for _, it := range items {
 		if (it.Visibility == store.Private && !acc.privileged) || it.BurnAfterRead {
@@ -96,5 +97,15 @@ func (s *Server) handleCollectionPage(w http.ResponseWriter, r *http.Request, ci
 	if len(vm.Entries) == 0 {
 		vm.Grid = false
 	}
-	s.writePage(w, "collection", vm, c.Visibility == store.Private)
+	if c.Visibility == store.Unlisted {
+		vm.OG = &ogMeta{Type: "website", Title: vm.Title, URL: vm.URL, Card: "summary",
+			Description: strconv.Itoa(len(vm.Entries)) + " items"}
+		for _, e := range vm.Entries {
+			if e.ThumbURL != "" {
+				vm.OG.Image, vm.OG.Card = e.ThumbURL, "summary_large_image"
+				break
+			}
+		}
+	}
+	s.writePage(w, r, "collection", vm, c.Visibility == store.Private)
 }

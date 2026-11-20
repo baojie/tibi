@@ -2,15 +2,15 @@
 <section class="item item-file">
   <h1>{{.Title}}</h1>
   <dl class="meta">
-    {{with .Item.Filename}}<dt>File</dt><dd>{{.}}</dd>{{end}}
-    <dt>Size</dt><dd>{{.Size}}</dd>
-    <dt>Type</dt><dd>{{.Item.Mime}}</dd>
+    {{with .Item.Filename}}<dt>{{t "meta.file"}}</dt><dd>{{.}}</dd>{{end}}
+    <dt>{{t "meta.size"}}</dt><dd>{{.Size}}</dd>
+    <dt>{{t "meta.type"}}</dt><dd>{{.Item.Mime}}</dd>
   </dl>
-  {{if or (eq .Item.Mime "image/heic") (eq .Item.Mime "image/heif")}}<p class="notice muted">HEIC photo: most browsers cannot display this format, so it is offered for download. (This server has no HEIC converter enabled.)</p>{{end}}
+  {{if or (eq .Item.Mime "image/heic") (eq .Item.Mime "image/heif")}}<p class="notice muted">{{t "notice.heic"}}</p>{{end}}
   {{template "notices" .}}
   <p class="actions">
-    <a class="button" href="{{.DownloadURL}}">Download</a>
-    <a class="button secondary" href="{{.RawURL}}" rel="nofollow">Raw</a>
+    <a class="button" href="{{.DownloadURL}}">{{t "action.download"}}</a>
+    {{if not .Burned}}<a class="button secondary" href="{{.RawURL}}" rel="nofollow">{{t "action.raw"}}</a>{{end}}
   </p>
 </section>
 {{end}}

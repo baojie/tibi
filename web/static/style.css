@@ -59,3 +59,27 @@ main:has(.item-collection) { max-width: 1200px; }
 .fork-editor textarea { width: 100%; min-height: 50vh; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); tab-size: 4; }
 .fork-editor .actions { margin-top: 8px; }
 .entry .image img { max-height: 60vh; width: auto; }
+.owner-nav { float: right; display: flex; gap: 16px; }
+.owner-nav a { color: var(--muted); text-decoration: none; }
+.owner-nav a:hover { color: var(--accent); }
+.owner-page h2 { font-size: 1.05rem; }
+.muted { color: var(--muted); }
+.error { color: #c0392b; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row .spacer { flex: 1; }
+.panel { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+.owner-page input[type=password], .owner-page input[type=search], .owner-page input:not([type]), .owner-page select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: var(--fg); }
+.owner-page input[type=password] { flex: 1; min-width: 200px; }
+.dropzone { display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 40px 16px; text-align: center; color: var(--muted); cursor: pointer; }
+.dropzone.over { border-color: var(--accent); color: var(--accent); }
+.options { margin: 12px 0; }
+#text-form textarea { width: 100%; min-height: 140px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); }
+.results, .item-list { list-style: none; padding: 0; }
+.results li, .item-list li { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.results img, .item-list img { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; }
+.result-link { font-family: ui-monospace, monospace; word-break: break-all; }
+.item-list a { font-weight: 600; word-break: break-all; }
+.link-button { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
+.results .button, .item-list .button { padding: 2px 10px; font-size: .85rem; }
+.button:disabled { opacity: .45; cursor: default; }
+.item-list a { color: var(--fg); }
