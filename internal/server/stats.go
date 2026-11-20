@@ -5,8 +5,8 @@ import (
 	"net"
 	"net/http"
 
-	"tibi/internal/metrics"
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/metrics"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // metricsAllowed: an admin token, or a direct connection from this machine.

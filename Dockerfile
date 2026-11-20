@@ -9,7 +9,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X tibi/internal/app.Version=${VERSION}" -o /out/tibi ./cmd/tibi
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/baojie/tibi/internal/app.Version=${VERSION}" -o /out/tibi ./cmd/tibi
 
 FROM debian:trixie-slim
 # libvips-tools + the libde265 plugin: HEIC → JPEG; libwebp7: fast thumbnails.

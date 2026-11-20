@@ -11,8 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"tibi/internal/blob"
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // Result summarizes a migration.

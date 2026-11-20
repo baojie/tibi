@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"tibi/internal/ingest"
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/ingest"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 type searchResult struct {

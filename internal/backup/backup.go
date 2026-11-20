@@ -34,9 +34,9 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"tibi/internal/blob"
-	"tibi/internal/ingest"
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/ingest"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // Format identifies tibi archives.

@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"tibi/internal/id"
-	"tibi/internal/metrics"
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/id"
+	"github.com/baojie/tibi/internal/metrics"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // CollectionJSON is the API representation of a collection.

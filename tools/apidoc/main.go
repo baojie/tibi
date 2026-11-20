@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"os"
 
-	"tibi/api"
-	"tibi/internal/apispec"
+	"github.com/baojie/tibi/api"
+	"github.com/baojie/tibi/internal/apispec"
 )
 
 func main() {

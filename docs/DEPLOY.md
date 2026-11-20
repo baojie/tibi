@@ -6,7 +6,7 @@ cost control, monitoring, backups and HEIC support.
 
 ## Installing
 
-Release builds (once published) provide:
+[Release builds](https://github.com/baojie/tibi/releases) provide:
 
 - **Binaries** for Linux (amd64, arm64), macOS (arm64) and Windows (amd64,
   for the client), as archives with the docs and client integrations.
@@ -22,12 +22,12 @@ Release builds (once published) provide:
 
   Secrets (S3 keys) go in `/etc/tibi/env` (mode 0600), read by the unit.
   Removing the package keeps your data and the `tibi` user.
-- **A Docker image** (`ghcr.io/<owner>/tibi`, amd64 and arm64) with the
+- **A Docker image** (`ghcr.io/baojie/tibi`, amd64 and arm64) with the
   HEIC converter included:
 
   ```sh
   docker run -d --name tibi -p 127.0.0.1:8070:8070 \
-    -v tibi-data:/data -e TIBI_BASE_URL=https://tibi.example.com ghcr.io/<owner>/tibi
+    -v tibi-data:/data -e TIBI_BASE_URL=https://tibi.example.com ghcr.io/baojie/tibi
   docker exec tibi tibi admin token create --name me --scopes upload,delete,read_private
   ```
 

@@ -43,6 +43,13 @@ an Android app (share → link), ShareX, Flameshot, PicGo, the ACDSeeN image
 viewer, and AI agents through MCP (`tibi mcp`). See
 [docs/CLIENTS.md](docs/CLIENTS.md).
 
+## Install
+
+Binaries, a `.deb` and checksums are on the
+[releases page](https://github.com/baojie/tibi/releases); the Docker image is
+`ghcr.io/baojie/tibi`; with Go, `go install github.com/baojie/tibi/cmd/tibi@latest`.
+See [docs/DEPLOY.md](docs/DEPLOY.md) for running a server.
+
 ## Quick start (from source)
 
 ```sh

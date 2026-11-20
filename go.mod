@@ -1,4 +1,4 @@
-module tibi
+module github.com/baojie/tibi
 
 go 1.26.11
 

@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/text/encoding/simplifiedchinese"
 
-	"tibi/internal/config"
-	"tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/testutil"
 )
 
 type textItem struct {

@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil"
 )
 
 // TestMain checks, after a full run, that the suite exercised every response

@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"tibi/internal/client"
+	"github.com/baojie/tibi/internal/client"
 )
 
 // album uploads files as one new collection and prints its URL. -t titles

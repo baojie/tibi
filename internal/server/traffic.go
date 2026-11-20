@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // countingWriter counts body bytes actually written.

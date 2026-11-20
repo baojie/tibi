@@ -17,8 +17,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"tibi/internal/blob"
-	"tibi/internal/id"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/id"
 )
 
 // Enabled reports whether S3 tests are configured.

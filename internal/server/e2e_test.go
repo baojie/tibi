@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"tibi/internal/e2e"
-	"tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/e2e"
+	"github.com/baojie/tibi/internal/testutil"
 )
 
 const marker = "TIBI-PLAINTEXT-MARKER-7f3a"

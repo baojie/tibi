@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 // api sends an authenticated API request and returns status and body.

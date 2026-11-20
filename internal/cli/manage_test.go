@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"tibi/internal/cli"
-	"tibi/internal/e2e"
+	"github.com/baojie/tibi/internal/cli"
+	"github.com/baojie/tibi/internal/e2e"
 )
 
 func TestManageCommands(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // Class is the result of sniffing an upload.

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tibi/internal/id"
+	"github.com/baojie/tibi/internal/id"
 )
 
 // Item kinds.

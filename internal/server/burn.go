@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // After a burn-after-read item is revealed, its content is fetched once

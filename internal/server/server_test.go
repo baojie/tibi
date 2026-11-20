@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"tibi/internal/config"
-	"tibi/internal/disposition"
-	"tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/disposition"
+	"github.com/baojie/tibi/internal/testutil"
 )
 
 type item struct {

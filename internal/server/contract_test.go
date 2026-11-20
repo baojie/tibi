@@ -2,11 +2,11 @@ package server_test
 
 import (
 	"fmt"
+	"github.com/baojie/tibi/internal/config"
 	"net/http"
 	"testing"
-	"tibi/internal/config"
 
-	"tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil"
 )
 
 // Every authenticated operation rejects a missing token (401) and a token

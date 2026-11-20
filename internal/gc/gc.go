@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"tibi/internal/blob"
-	"tibi/internal/ingest"
-	"tibi/internal/metrics"
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/ingest"
+	"github.com/baojie/tibi/internal/metrics"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // Interval is how often the server runs GC.

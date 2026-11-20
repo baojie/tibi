@@ -9,8 +9,8 @@ import (
 
 	_ "golang.org/x/image/webp"
 
-	"tibi/internal/store"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 func classify(t *testing.T, name string, b []byte) Class {

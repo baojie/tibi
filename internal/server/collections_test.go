@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"tibi/internal/config"
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 type collJSON struct {

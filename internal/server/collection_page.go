@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"tibi/internal/id"
-	"tibi/internal/render"
-	"tibi/internal/store"
-	"tibi/internal/units"
+	"github.com/baojie/tibi/internal/id"
+	"github.com/baojie/tibi/internal/render"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/units"
 )
 
 type collEntry struct {

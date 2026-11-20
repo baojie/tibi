@@ -18,7 +18,7 @@ builds:
     binary: tibi
     env: [CGO_ENABLED=0]
     flags: [-trimpath]
-    ldflags: ["-s -w -X tibi/internal/app.Version={{ .Version }}"]
+    ldflags: ["-s -w -X github.com/baojie/tibi/internal/app.Version={{ .Version }}"]
     targets:
       - linux_amd64
       - linux_arm64
@@ -99,6 +99,8 @@ homebrew_casks:
       owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
       name: homebrew-tibi
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    # Without a token for the tap repository the cask is built but not pushed.
+    skip_upload: "{{ if not .Env.HOMEBREW_TAP_TOKEN }}true{{ end }}"
     directory: Casks
     description: Self-hosted image host and pastebin — client and server
     binaries: [tibi]

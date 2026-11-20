@@ -19,15 +19,15 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"tibi/internal/backup"
-	"tibi/internal/blob"
-	"tibi/internal/config"
-	"tibi/internal/gc"
-	"tibi/internal/ingest"
-	"tibi/internal/migrate"
-	"tibi/internal/server"
-	"tibi/internal/store"
-	"tibi/internal/units"
+	"github.com/baojie/tibi/internal/backup"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/gc"
+	"github.com/baojie/tibi/internal/ingest"
+	"github.com/baojie/tibi/internal/migrate"
+	"github.com/baojie/tibi/internal/server"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/units"
 )
 
 // Version is set at build time via -ldflags "-X tibi/internal/app.Version=...".

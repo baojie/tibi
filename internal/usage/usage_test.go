@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/store"
 )
 
 func TestTracker(t *testing.T) {

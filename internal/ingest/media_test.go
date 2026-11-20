@@ -5,8 +5,8 @@ import (
 	"image"
 	"testing"
 
-	"tibi/internal/store"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 func TestSniffMedia(t *testing.T) {

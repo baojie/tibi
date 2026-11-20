@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"tibi/api"
-	"tibi/internal/apispec"
+	"github.com/baojie/tibi/api"
+	"github.com/baojie/tibi/internal/apispec"
 )
 
 func load(t *testing.T) *apispec.Spec {

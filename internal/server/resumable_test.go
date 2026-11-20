@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"tibi/internal/client"
-	"tibi/internal/config"
-	"tibi/internal/metrics"
-	"tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/client"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/metrics"
+	"github.com/baojie/tibi/internal/testutil"
 )
 
 func bigFile(t *testing.T, size int) (string, []byte) {

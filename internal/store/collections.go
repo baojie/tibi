@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"tibi/internal/id"
+	"github.com/baojie/tibi/internal/id"
 )
 
 // Collection is an album or multi-file paste: an ordered set of items.

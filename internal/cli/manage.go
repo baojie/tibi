@@ -11,9 +11,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"tibi/internal/client"
-	"tibi/internal/id"
-	"tibi/internal/units"
+	"github.com/baojie/tibi/internal/client"
+	"github.com/baojie/tibi/internal/id"
+	"github.com/baojie/tibi/internal/units"
 )
 
 // collectionID recognizes a collection URL (…/c/{id}) or "c/{id}".

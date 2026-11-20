@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"tibi/internal/id"
-	"tibi/internal/ingest"
-	"tibi/internal/metrics"
-	"tibi/internal/store"
-	"tibi/internal/units"
+	"github.com/baojie/tibi/internal/id"
+	"github.com/baojie/tibi/internal/ingest"
+	"github.com/baojie/tibi/internal/metrics"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/units"
 )
 
 type ctxKey int

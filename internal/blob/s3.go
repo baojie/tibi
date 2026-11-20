@@ -14,8 +14,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"tibi/internal/disposition"
-	"tibi/internal/id"
+	"github.com/baojie/tibi/internal/disposition"
+	"github.com/baojie/tibi/internal/id"
 )
 
 // S3Config configures an S3-compatible backend (AWS S3, Backblaze B2,

@@ -13,8 +13,8 @@ import (
 
 	"github.com/minio/minio-go/v7"
 
-	"tibi/internal/blob"
-	"tibi/internal/testutil/s3test"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/testutil/s3test"
 )
 
 func backends(t *testing.T) map[string]func(t *testing.T) blob.Store {

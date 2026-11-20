@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"tibi/internal/cli"
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/cli"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 type fakeClip struct {

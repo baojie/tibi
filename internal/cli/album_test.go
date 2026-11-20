@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 func TestAlbumCommand(t *testing.T) {

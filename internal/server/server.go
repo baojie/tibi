@@ -13,17 +13,17 @@ import (
 	"sync"
 	"time"
 
-	"tibi/api"
-	"tibi/internal/blob"
-	"tibi/internal/config"
-	"tibi/internal/i18n"
-	"tibi/internal/ingest"
-	"tibi/internal/metrics"
-	"tibi/internal/render"
-	"tibi/internal/sign"
-	"tibi/internal/store"
-	"tibi/internal/usage"
-	"tibi/web"
+	"github.com/baojie/tibi/api"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/i18n"
+	"github.com/baojie/tibi/internal/ingest"
+	"github.com/baojie/tibi/internal/metrics"
+	"github.com/baojie/tibi/internal/render"
+	"github.com/baojie/tibi/internal/sign"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/usage"
+	"github.com/baojie/tibi/web"
 )
 
 // Server holds dependencies for the HTTP handlers.

@@ -18,8 +18,8 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"tibi/internal/client"
-	"tibi/internal/units"
+	"github.com/baojie/tibi/internal/client"
+	"github.com/baojie/tibi/internal/units"
 )
 
 // App holds the CLI's environment so tests can drive it.

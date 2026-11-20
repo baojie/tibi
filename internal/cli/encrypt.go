@@ -12,8 +12,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"tibi/internal/client"
-	"tibi/internal/e2e"
+	"github.com/baojie/tibi/internal/client"
+	"github.com/baojie/tibi/internal/e2e"
 )
 
 // maxEncryptBytes bounds what is encrypted in memory (the browser decrypts

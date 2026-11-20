@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"tibi/internal/blob"
-	"tibi/internal/config"
-	"tibi/internal/gc"
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/gc"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 func TestRange(t *testing.T) {

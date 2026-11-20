@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"tibi/internal/i18n"
+	"github.com/baojie/tibi/internal/i18n"
 )
 
 func load(t *testing.T) *i18n.Catalog {

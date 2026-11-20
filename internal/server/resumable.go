@@ -15,10 +15,10 @@ import (
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 	"github.com/tus/tusd/v2/pkg/memorylocker"
 
-	"tibi/internal/id"
-	"tibi/internal/ingest"
-	"tibi/internal/metrics"
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/id"
+	"github.com/baojie/tibi/internal/ingest"
+	"github.com/baojie/tibi/internal/metrics"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // Resumable uploads (PLAN A6): the tus 1.0 protocol at /api/v1/uploads/.

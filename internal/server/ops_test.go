@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"tibi/internal/config"
-	"tibi/internal/server"
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/server"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 func getRef(t *testing.T, u, referer string) *http.Response {

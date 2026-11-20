@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"tibi/internal/store"
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 // unfurl fetches a page the way Slack's and Discord's link expanders do.

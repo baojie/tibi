@@ -5,7 +5,7 @@ import (
 	"html/template"
 	"net/http"
 
-	"tibi/internal/i18n"
+	"github.com/baojie/tibi/internal/i18n"
 )
 
 var pageNames = []string{"file", "image", "text", "burn", "video", "audio", "collection", "upload", "recent", "encrypted"}

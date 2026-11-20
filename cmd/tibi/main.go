@@ -11,9 +11,9 @@ import (
 
 	"golang.org/x/term"
 
-	"tibi/internal/app"
-	"tibi/internal/cli"
-	"tibi/internal/mcp"
+	"github.com/baojie/tibi/internal/app"
+	"github.com/baojie/tibi/internal/cli"
+	"github.com/baojie/tibi/internal/mcp"
 )
 
 func main() {

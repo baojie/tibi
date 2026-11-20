@@ -3,6 +3,7 @@ package testutil
 
 import (
 	"context"
+	"github.com/baojie/tibi/internal/blob"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -10,15 +11,14 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"tibi/internal/blob"
 	"time"
 
-	"tibi/internal/app"
-	"tibi/internal/config"
-	"tibi/internal/gc"
-	"tibi/internal/server"
-	"tibi/internal/store"
-	"tibi/internal/testutil/s3test"
+	"github.com/baojie/tibi/internal/app"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/gc"
+	"github.com/baojie/tibi/internal/server"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/testutil/s3test"
 )
 
 // Env is a running test server.

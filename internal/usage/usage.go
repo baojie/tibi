@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // Tracker accumulates traffic in memory. Caps are checked against today's

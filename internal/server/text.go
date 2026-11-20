@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"tibi/internal/blob"
-	"tibi/internal/render"
-	"tibi/internal/store"
-	"tibi/internal/units"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/render"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/units"
 )
 
 // textView is the rendered body of a text item.

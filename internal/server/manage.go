@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"tibi/internal/id"
-	"tibi/internal/render"
-	"tibi/internal/store"
-	"tibi/internal/units"
+	"github.com/baojie/tibi/internal/id"
+	"github.com/baojie/tibi/internal/render"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/units"
 )
 
 // handleList serves GET /api/v1/items?limit&cursor&kind&source.

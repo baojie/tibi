@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"tibi/internal/blob"
-	"tibi/internal/disposition"
-	"tibi/internal/id"
-	"tibi/internal/ingest"
-	"tibi/internal/metrics"
-	"tibi/internal/store"
-	"tibi/internal/units"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/disposition"
+	"github.com/baojie/tibi/internal/id"
+	"github.com/baojie/tibi/internal/ingest"
+	"github.com/baojie/tibi/internal/metrics"
+	"github.com/baojie/tibi/internal/store"
+	"github.com/baojie/tibi/internal/units"
 )
 
 const (

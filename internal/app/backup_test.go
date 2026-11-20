@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
-	"tibi/internal/app"
-	"tibi/internal/backup"
-	"tibi/internal/config"
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/app"
+	"github.com/baojie/tibi/internal/backup"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 func call(t *testing.T, method, url, tok string, body io.Reader, ct string) []byte {

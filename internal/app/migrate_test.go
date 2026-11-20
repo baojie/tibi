@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"tibi/internal/app"
-	"tibi/internal/config"
-	"tibi/internal/migrate"
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/app"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/migrate"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 func upload(t *testing.T, e *testutil.Env, tok, query string, body []byte) string {

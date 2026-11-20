@@ -12,12 +12,12 @@ import (
 	"strings"
 	"testing"
 
-	"tibi/internal/client"
-	"tibi/internal/config"
-	"tibi/internal/e2e"
-	"tibi/internal/mcp"
-	"tibi/internal/testutil"
-	"tibi/internal/testutil/testimg"
+	"github.com/baojie/tibi/internal/client"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/e2e"
+	"github.com/baojie/tibi/internal/mcp"
+	"github.com/baojie/tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/testutil/testimg"
 )
 
 // harness is a minimal MCP client talking to the server over pipes.

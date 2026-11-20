@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"tibi/internal/config"
-	"tibi/internal/testutil"
+	"github.com/baojie/tibi/internal/config"
+	"github.com/baojie/tibi/internal/testutil"
 )
 
 const extOrigin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"

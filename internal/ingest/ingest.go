@@ -24,10 +24,10 @@ import (
 
 	_ "golang.org/x/image/webp"
 
-	"tibi/internal/blob"
-	"tibi/internal/e2e"
-	"tibi/internal/render"
-	"tibi/internal/store"
+	"github.com/baojie/tibi/internal/blob"
+	"github.com/baojie/tibi/internal/e2e"
+	"github.com/baojie/tibi/internal/render"
+	"github.com/baojie/tibi/internal/store"
 )
 
 // ErrTooLarge is returned when the upload exceeds the size limit.

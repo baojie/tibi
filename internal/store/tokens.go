@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"tibi/internal/id"
+	"github.com/baojie/tibi/internal/id"
 )
 
 // Scopes.

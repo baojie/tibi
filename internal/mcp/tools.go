@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"tibi/internal/client"
-	"tibi/internal/e2e"
+	"github.com/baojie/tibi/internal/client"
+	"github.com/baojie/tibi/internal/e2e"
 )
 
 // Toolbox implements the tools on top of the tibi API client.
