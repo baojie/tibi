@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -96,7 +97,8 @@ func TestHotlinkProtection(t *testing.T) {
 		{img.RawURL, "https://friends.org.evil.com/", 403},   // not a subdomain
 		{img.RawURL, e.Cfg.BaseURL + "/" + img.ID, 200},      // tibi's own page
 		{e.Srv.URL + "/" + img.ID + "/thumb", "https://evil.example.net/", 403},
-		{img.DownloadURL, "https://evil.example.net/", 200}, // downloads are not embeds
+		{img.DownloadURL, "https://evil.example.net/", 403}, // <img src=…/dl> embeds too
+		{txt.DownloadURL, "https://evil.example.net/", 200}, // only media is protected
 		{txt.RawURL, "https://evil.example.net/", 200},      // only media is protected
 	}
 	for _, c := range cases {
@@ -146,7 +148,12 @@ func TestQuota(t *testing.T) {
 }
 
 func TestCountersStatsMetrics(t *testing.T) {
-	e := testutil.New(t, nil)
+	// By default /metrics needs an admin token, even locally.
+	strict := testutil.New(t, nil)
+	if resp, _ := get(t, strict.Srv.URL+"/metrics"); resp.StatusCode != 401 {
+		t.Fatalf("metrics without token by default: %d", resp.StatusCode)
+	}
+	e := testutil.New(t, func(c *config.Server) { c.MetricsAllowLocal = true })
 	tok := e.Token("t")
 	admin := e.Token("root", "admin")
 	it := up(t, e, tok, "?filename=data.bin", make([]byte, 2000))
@@ -199,5 +206,41 @@ func TestCountersStatsMetrics(t *testing.T) {
 	r.Body.Close()
 	if r.StatusCode != 401 {
 		t.Fatalf("proxied metrics with non-admin token: %d", r.StatusCode)
+	}
+}
+
+// Parallel downloads must not all slip under a nearly used-up cap: bytes
+// are counted when a response starts, not when it ends (security review).
+func TestDailyCapParallel(t *testing.T) {
+	e := testutil.New(t, func(c *config.Server) { c.MaxItemBytesDay = 10 << 20 })
+	tok := e.Token("t")
+	it := up(t, e, tok, "?filename=big.bin", make([]byte, 8<<20))
+	tr := &http.Transport{DisableKeepAlives: true}
+	defer tr.CloseIdleConnections()
+	var mu sync.Mutex
+	codes := map[int]int{}
+	var bodies []io.Closer
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := (&http.Client{Transport: tr}).Get(it.DownloadURL)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			mu.Lock() // keep bodies unread: the responses stay in flight
+			codes[resp.StatusCode]++
+			bodies = append(bodies, resp.Body)
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	for _, b := range bodies {
+		b.Close()
+	}
+	if codes[200] > 2 || codes[200]+codes[429] != 8 {
+		t.Fatalf("8 parallel downloads of 8 MiB under a 10 MiB cap: %v", codes)
 	}
 }

@@ -38,6 +38,45 @@ func (s *Server) overCap(w http.ResponseWriter, it *store.Item) bool {
 	if !itemOver && !totalOver {
 		return false
 	}
+	s.capReply(w, itemOver)
+	return true
+}
+
+// reserveCap is overCap for a response about to send n bytes: it counts
+// them right away (see usage.Tracker.Reserve). Call release when done.
+func (s *Server) reserveCap(w http.ResponseWriter, it *store.Item, n int64) (release func(), ok bool) {
+	itemOver, totalOver, release := s.usage.Reserve(it.ID, n, s.cfg.MaxItemBytesDay, s.cfg.MaxTotalBytesDay)
+	if itemOver || totalOver {
+		s.capReply(w, itemOver)
+		return nil, false
+	}
+	return release, true
+}
+
+// expectedBytes estimates what a request for a size-byte blob will send:
+// the whole blob, or the first range asked for.
+func expectedBytes(r *http.Request, size int64) int64 {
+	rg, ok := strings.CutPrefix(r.Header.Get("Range"), "bytes=")
+	if !ok {
+		return size
+	}
+	first, _, _ := strings.Cut(rg, ",")
+	a, b, _ := strings.Cut(strings.TrimSpace(first), "-")
+	start, err1 := strconv.ParseInt(a, 10, 64)
+	end, err2 := strconv.ParseInt(b, 10, 64)
+	switch {
+	case a == "" && err2 == nil: // suffix: last N bytes
+		return min(end, size)
+	case err1 != nil:
+		return size
+	case b == "" || err2 != nil || end >= size:
+		return max(0, size-start)
+	default:
+		return max(0, end-start+1)
+	}
+}
+
+func (s *Server) capReply(w http.ResponseWriter, itemOver bool) {
 	now := s.store.Now().UTC()
 	midnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
 	w.Header().Set("Retry-After", strconv.Itoa(int(midnight.Sub(now).Seconds())+1))
@@ -49,7 +88,6 @@ func (s *Server) overCap(w http.ResponseWriter, it *store.Item) bool {
 	} else {
 		w.Write([]byte("This server has used up its bandwidth allowance for today. Try again after midnight UTC.\n"))
 	}
-	return true
 }
 
 // hotlinkBlocked enforces allowed_referers on inline media (PLAN A8.10):

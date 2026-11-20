@@ -32,6 +32,9 @@ type Server struct {
 	MaxTotalBytesDay  int64    `toml:"max_total_bytes_per_day"`
 	DefaultLocale     string   `toml:"default_locale"`
 	SecretKeyFile     string   `toml:"secret_key_file"`
+	MetricsAllowLocal bool     `toml:"metrics_allow_local"`
+	RateLimit         int64    `toml:"rate_limit"` // API requests per minute per token; 0 = off
+	RateBurst         int64    `toml:"rate_burst"`
 	Storage           Storage  `toml:"storage"`
 }
 
@@ -67,6 +70,8 @@ func Default() Server {
 		HEICConverter:     "auto",
 		BlobDelivery:      "proxy",
 		DefaultLocale:     "en",
+		RateLimit:         1200,
+		RateBurst:         200,
 		Storage:           Storage{Backend: "fs"},
 	}
 }
@@ -199,6 +204,13 @@ func applyEnv(c *Server, getenv func(string) string) error {
 			*p = v
 		}
 	}
+	if v, ok := lookup(getenv, "TIBI_METRICS_ALLOW_LOCAL"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("TIBI_METRICS_ALLOW_LOCAL: %w", err)
+		}
+		c.MetricsAllowLocal = b
+	}
 	if v, ok := lookup(getenv, "TIBI_CORS_ORIGINS"); ok {
 		c.CORSOrigins = strings.Fields(strings.ReplaceAll(v, ",", " "))
 	}
@@ -206,6 +218,8 @@ func applyEnv(c *Server, getenv func(string) string) error {
 		c.AllowedReferers = strings.Fields(strings.ReplaceAll(v, ",", " "))
 	}
 	ints := map[string]*int64{
+		"TIBI_RATE_LIMIT":          &c.RateLimit,
+		"TIBI_RATE_BURST":          &c.RateBurst,
 		"TIBI_MAX_UPLOAD_BYTES":    &c.MaxUploadBytes,
 		"TIBI_MAX_RESUMABLE_BYTES": &c.MaxResumableBytes,
 		"TIBI_MAX_TEXT_BYTES":      &c.MaxTextBytes,

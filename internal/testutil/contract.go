@@ -116,7 +116,7 @@ func tusProtocol(r *http.Request) bool {
 
 // TusOperations are excluded from response coverage, like their validation.
 var TusOperations = []string{
-	"POST /api/v1/uploads/ 201", "POST /api/v1/uploads/ 400", "POST /api/v1/uploads/ 401", "POST /api/v1/uploads/ 403", "POST /api/v1/uploads/ 413",
+	"POST /api/v1/uploads/ 201", "POST /api/v1/uploads/ 400", "POST /api/v1/uploads/ 401", "POST /api/v1/uploads/ 403", "POST /api/v1/uploads/ 413", "POST /api/v1/uploads/ 429",
 	"HEAD /api/v1/uploads/{id} 200", "HEAD /api/v1/uploads/{id} 404",
 	"PATCH /api/v1/uploads/{id} 204", "PATCH /api/v1/uploads/{id} 400", "PATCH /api/v1/uploads/{id} 404", "PATCH /api/v1/uploads/{id} 409",
 	"DELETE /api/v1/uploads/{id} 204", "DELETE /api/v1/uploads/{id} 404",

@@ -90,6 +90,7 @@ func (s *Server) tusCreate(hook tusd.HookEvent) (tusd.HTTPResponse, tusd.FileInf
 		return tusd.HTTPResponse{}, tusd.FileInfoChanges{}, err
 	}
 	r := (&http.Request{}).WithContext(hook.Context)
+	defer s.quotaLock(r)() // until the upload row exists and counts as pending
 	if msg := s.quotaError(r, hook.Upload.Size); msg != "" {
 		return tusd.HTTPResponse{}, tusd.FileInfoChanges{}, tusd.NewError("ERR_QUOTA", msg, http.StatusRequestEntityTooLarge)
 	}
@@ -120,6 +121,15 @@ func (s *Server) tusFinish(hook tusd.HookEvent) (tusd.HTTPResponse, error) {
 	json.Unmarshal([]byte(u.Options), &meta)
 	o, err := s.tusOptions(ctx, meta)
 	if err == nil {
+		// Re-check the quota with the final size: other uploads may have
+		// finished since this one was created.
+		r := (&http.Request{}).WithContext(hook.Context)
+		unlock := s.quotaLock(r)
+		defer unlock()
+		if msg := s.quotaErrorExcept(r, hook.Upload.Size, upID); msg != "" {
+			s.store.FinishUpload(ctx, upID, "", msg)
+			return tusd.HTTPResponse{}, tusd.NewError("ERR_QUOTA", msg, http.StatusRequestEntityTooLarge)
+		}
 		o.TokenID = u.TokenID
 		var p *ingest.Prepared
 		if p, err = s.ingest.PrepareFile(ctx, filepath.Join(s.tus.dir, upID), o); err == nil {

@@ -229,3 +229,30 @@ func TestResumableCleanup(t *testing.T) {
 		t.Fatalf("HEAD after cleanup: %d", r.StatusCode)
 	}
 }
+
+// Unfinished resumable uploads count against the quota, so two of them
+// cannot share the same remaining space (security review, 0.1.0).
+func TestResumableQuota(t *testing.T) {
+	e := testutil.New(t, nil)
+	q := int64(1000)
+	tok, _, err := e.Instance.Store.CreateToken(context.Background(), "q", []string{"upload"}, &q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := tusCreate(t, e, tok, "900", nil)
+	first.Body.Close()
+	if first.StatusCode != 201 {
+		t.Fatalf("first create: %d", first.StatusCode)
+	}
+	second := tusCreate(t, e, tok, "900", nil) // (the helper closes the body)
+	if second.StatusCode != 413 {
+		t.Fatalf("second create over quota: %d", second.StatusCode)
+	}
+	// A plain upload is refused too while the first one is pending.
+	if resp, _ := upload(t, e, tok, "", make([]byte, 200)); resp.StatusCode != 413 {
+		t.Fatalf("plain upload beside a pending one: %d", resp.StatusCode)
+	}
+	if resp, _ := upload(t, e, tok, "", make([]byte, 100)); resp.StatusCode != 201 {
+		t.Fatalf("upload that fits: %d", resp.StatusCode)
+	}
+}

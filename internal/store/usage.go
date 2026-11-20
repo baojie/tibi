@@ -89,6 +89,15 @@ func (s *Store) TokenUsage(ctx context.Context, tokenID int64) (int64, error) {
 	return n.Int64, err
 }
 
+// PendingUploadBytes is the declared size of a token's unfinished resumable
+// uploads (except one), which a quota must count before they complete.
+func (s *Store) PendingUploadBytes(ctx context.Context, tokenID int64, except string) (int64, error) {
+	var n sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `SELECT SUM(size) FROM uploads WHERE token_id = ? AND id != ?
+		AND (item_id IS NULL OR item_id = '') AND (error IS NULL OR error = '')`, tokenID, except).Scan(&n)
+	return n.Int64, err
+}
+
 // Stats summarizes the instance.
 type Stats struct {
 	Items        int

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -279,5 +280,36 @@ func TestContentDisposition(t *testing.T) {
 		if got := disposition.Attachment(in, "ID.txt"); got != want {
 			t.Errorf("%q:\n got %s\nwant %s", in, got, want)
 		}
+	}
+}
+
+// One multipart request cannot hold an unbounded number of files open.
+func TestMultipartPartLimit(t *testing.T) {
+	e := testutil.New(t, nil)
+	tok := e.Token("t")
+	parts := make([][2]string, 101)
+	for i := range parts {
+		parts[i] = [2]string{fmt.Sprintf("f%d.txt", i), "x"}
+	}
+	ct, body := multipartBody(t, nil, parts...)
+	resp, b := postMultipart(t, e, tok, ct, body)
+	if resp.StatusCode != 400 || !strings.Contains(string(b), "at most 100 files") {
+		t.Fatalf("101 parts: %d %s", resp.StatusCode, b)
+	}
+	ct, body = multipartBody(t, nil, parts[:100]...)
+	if resp, b := postMultipart(t, e, tok, ct, body); resp.StatusCode != 201 {
+		t.Fatalf("100 parts: %d %s", resp.StatusCode, b)
+	}
+}
+
+func TestStaticNoListing(t *testing.T) {
+	e := testutil.New(t, nil)
+	for _, p := range []string{"/static/", "/static/vendor/"} {
+		if c := status(t, e.Srv.URL+p, ""); c != 404 {
+			t.Errorf("%s: %d", p, c)
+		}
+	}
+	if c := status(t, e.Srv.URL+"/static/e2e.js", ""); c != 200 {
+		t.Fatalf("static file: %d", c)
 	}
 }

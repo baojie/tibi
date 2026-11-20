@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"tibi/api"
@@ -27,6 +28,9 @@ import (
 
 // Server holds dependencies for the HTTP handlers.
 type Server struct {
+	burned  burnGrants
+	quotaMu sync.Mutex
+	limiter *rateLimiter
 	cfg     config.Server
 	store   *store.Store
 	blobs   blob.Store
@@ -87,9 +91,10 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		return nil, err
 	}
 	s := &Server{
-		cfg:   cfg,
-		store: st,
-		blobs: bs,
+		limiter: newRateLimiter(int(cfg.RateLimit), int(cfg.RateBurst)),
+		cfg:     cfg,
+		store:   st,
+		blobs:   bs,
 		ingest: &ingest.Pipeline{Store: st, Blobs: bs, TempDir: tempDir, StripImageMeta: cfg.StripImageMeta,
 			HEIC: heic, Log: log},
 		tempDir:     tempDir,
@@ -117,7 +122,7 @@ func (s *Server) routes() {
 	m.Handle("GET /api/v1/stats", s.auth(store.ScopeAdmin, http.HandlerFunc(s.handleStats)))
 	m.HandleFunc("GET /robots.txt", s.handleRobots)
 	m.HandleFunc("GET /static/chroma.css", s.handleChromaCSS)
-	m.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
+	m.Handle("GET /static/", http.StripPrefix("/static/", noListing(http.FileServerFS(static))))
 
 	m.HandleFunc("GET /api/v1/openapi.yaml", s.handleOpenAPI)
 	m.Handle("GET /api/v1/whoami", s.auth("", http.HandlerFunc(s.handleWhoami)))
@@ -246,4 +251,15 @@ func bearer(r *http.Request) string {
 		return strings.TrimSpace(h[7:])
 	}
 	return ""
+}
+
+// noListing hides directory listings of the static files.
+func noListing(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "" || strings.HasSuffix(r.URL.Path, "/") {
+			notFound(w)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }

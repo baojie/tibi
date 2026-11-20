@@ -72,6 +72,35 @@ func (t *Tracker) Over(id string, itemCap, totalCap int64) (itemOver, totalOver 
 	return itemCap > 0 && t.itemDay[id] >= itemCap, totalCap > 0 && t.totalDay >= totalCap
 }
 
+// Reserve checks the caps like Over and, if serving may go ahead, counts n
+// bytes against today's totals at once, so concurrent requests see them
+// (counting only after a response finished let parallel downloads all pass
+// a nearly used-up cap). release undoes the reservation; the bytes actually
+// sent are then recorded with Add.
+func (t *Tracker) Reserve(id string, n, itemCap, totalCap int64) (itemOver, totalOver bool, release func()) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rollover()
+	itemOver, totalOver = itemCap > 0 && t.itemDay[id] >= itemCap, totalCap > 0 && t.totalDay >= totalCap
+	if itemOver || totalOver || n <= 0 {
+		return itemOver, totalOver, func() {}
+	}
+	day := t.day
+	t.itemDay[id] += n
+	t.totalDay += n
+	var once sync.Once
+	return false, false, func() {
+		once.Do(func() {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			if t.day == day { // a new day started from zero anyway
+				t.itemDay[id] -= n
+				t.totalDay -= n
+			}
+		})
+	}
+}
+
 // Add records a hit (view) and/or bytes served for item id.
 func (t *Tracker) Add(id string, bytes int64, view bool) {
 	t.mu.Lock()

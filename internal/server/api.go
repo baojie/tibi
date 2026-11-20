@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"tibi/internal/id"
 	"tibi/internal/ingest"
@@ -46,6 +47,10 @@ func (s *Server) auth(scope string, next http.Handler) http.Handler {
 			apiError(w, http.StatusUnauthorized, "unauthorized", "invalid or revoked token")
 			return
 		}
+		if ok, wait := s.limiter.allow(t.ID, time.Now()); !ok {
+			rateLimited(w, wait)
+			return
+		}
 		if scope != "" && !t.Has(scope) {
 			apiError(w, http.StatusForbidden, "forbidden", "token lacks scope "+scope)
 			return
@@ -71,17 +76,47 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 
 // quotaError reports why adding n bytes would exceed the token's upload
 // quota (PLAN A8.7), or "" when it fits or there is no quota.
+//
+// Unfinished resumable uploads count as used. Callers that go on to commit
+// hold quotaLock across the check and the commit, so concurrent uploads
+// cannot each pass on the same remaining space.
 func (s *Server) quotaError(r *http.Request, n int64) string {
+	return s.quotaErrorExcept(r, n, "")
+}
+
+// quotaErrorExcept is quotaError not counting the resumable upload except
+// (the one being finished).
+func (s *Server) quotaErrorExcept(r *http.Request, n int64, except string) string {
 	t := tokenFrom(r.Context())
-	if t.QuotaBytes == nil {
+	if t == nil || t.QuotaBytes == nil {
 		return ""
 	}
 	used, err := s.store.TokenUsage(r.Context(), t.ID)
-	if err != nil || used+n <= *t.QuotaBytes {
+	if err != nil {
+		s.log.Error("quota", "err", err)
+		return "upload quota could not be checked"
+	}
+	pending, err := s.store.PendingUploadBytes(r.Context(), t.ID, except)
+	if err != nil {
+		s.log.Error("quota", "err", err)
+		return "upload quota could not be checked"
+	}
+	used += pending
+	if used+n <= *t.QuotaBytes {
 		return ""
 	}
 	return fmt.Sprintf("upload quota exceeded: %s of %s already used, this upload needs %s",
 		units.FormatBytes(used), units.FormatBytes(*t.QuotaBytes), units.FormatBytes(n))
+}
+
+// quotaLock serializes quota check and commit for tokens with a quota
+// (others pay nothing). Returns the unlock function.
+func (s *Server) quotaLock(r *http.Request) func() {
+	if t := tokenFrom(r.Context()); t == nil || t.QuotaBytes == nil {
+		return func() {}
+	}
+	s.quotaMu.Lock()
+	return s.quotaMu.Unlock
 }
 
 // opt reads an upload option from the query string or an X-Tibi-* header.
@@ -228,6 +263,14 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 // file bytes themselves.
 const multipartOverhead = 1 << 20
 
+// maxMultipartFiles and maxMultipartFields bound one multipart request:
+// each file part holds temporary files open until the request ends, and
+// 20 000 one-byte parts once meant 40 000 open descriptors.
+const (
+	maxMultipartFiles  = 100
+	maxMultipartFields = 50
+)
+
 type spooled struct {
 	name string
 	f    *os.File
@@ -269,6 +312,14 @@ func (s *Server) handleMultipart(w http.ResponseWriter, r *http.Request, boundar
 			return
 		}
 		name := part.FormName()
+		if name != "file" && len(fields) >= maxMultipartFields {
+			apiError(w, http.StatusBadRequest, "bad_request", "too many form fields")
+			return
+		}
+		if name == "file" && len(files) >= maxMultipartFiles {
+			apiError(w, http.StatusBadRequest, "bad_request", fmt.Sprintf("at most %d files per request; use several requests or a collection", maxMultipartFiles))
+			return
+		}
 		if name != "file" {
 			v, err := io.ReadAll(io.LimitReader(part, 64<<10))
 			if err != nil {
@@ -374,6 +425,7 @@ func (s *Server) finishUpload(w http.ResponseWriter, r *http.Request, prepared [
 	for _, p := range prepared {
 		total += p.Item.Size
 	}
+	defer s.quotaLock(r)()
 	if msg := s.quotaError(r, total); msg != "" {
 		apiError(w, http.StatusRequestEntityTooLarge, "too_large", msg)
 		return

@@ -18,6 +18,12 @@ func (s *Server) metricsAllowed(r *http.Request) bool {
 			return true
 		}
 	}
+	// Without a token only when explicitly allowed: behind a reverse proxy
+	// on the same machine every request comes from loopback, and a plain
+	// proxy_pass adds no X-Forwarded-For to tell them apart.
+	if !s.cfg.MetricsAllowLocal {
+		return false
+	}
 	if r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" || r.Header.Get("X-Real-Ip") != "" {
 		return false
 	}
@@ -28,7 +34,7 @@ func (s *Server) metricsAllowed(r *http.Request) bool {
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if !s.metricsAllowed(r) {
-		apiError(w, http.StatusUnauthorized, "unauthorized", "metrics need an admin token or a local connection")
+		apiError(w, http.StatusUnauthorized, "unauthorized", "metrics need an admin token (or metrics_allow_local and a direct local connection)")
 		return
 	}
 	st, err := s.store.Stats(r.Context(), 0)

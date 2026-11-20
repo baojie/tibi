@@ -1,7 +1,10 @@
 package server_test
 
 import (
+	"fmt"
+	"net/http"
 	"testing"
+	"tibi/internal/config"
 
 	"tibi/internal/testutil"
 )
@@ -51,5 +54,45 @@ func TestAuthErrorsEveryOperation(t *testing.T) {
 	// The served document is the one the tests validate against.
 	if resp, b := get(t, e.Srv.URL+"/api/v1/openapi.yaml"); resp.StatusCode != 200 || len(b) < 1000 {
 		t.Fatal("openapi.yaml not served")
+	}
+}
+
+// Every authenticated operation is rate limited per token (PLAN A8.7).
+func TestRateLimitEveryOperation(t *testing.T) {
+	e := testutil.New(t, func(c *config.Server) { c.RateLimit, c.RateBurst = 1, 1 })
+	setup := e.Token("setup", "admin")
+	it := up(t, e, setup, "", []byte("x"))
+	ops := []struct{ method, path string }{
+		{"GET", "/api/v1/whoami"},
+		{"POST", "/api/v1/items"},
+		{"GET", "/api/v1/items"},
+		{"GET", "/api/v1/items/" + it.ID},
+		{"PATCH", "/api/v1/items/" + it.ID},
+		{"DELETE", "/api/v1/items/" + it.ID},
+		{"GET", "/api/v1/search?q=x"},
+		{"POST", "/api/v1/items/" + it.ID + "/fork"},
+		{"POST", "/api/v1/items/" + it.ID + "/share-link"},
+		{"POST", "/api/v1/collections"},
+		{"GET", "/api/v1/collections"},
+		{"GET", "/api/v1/collections/" + it.ID},
+		{"PATCH", "/api/v1/collections/" + it.ID},
+		{"DELETE", "/api/v1/collections/" + it.ID},
+		{"GET", "/api/v1/stats"},
+		{"POST", "/api/v1/uploads/"},
+		{"GET", "/api/v1/uploads/someupload/item"},
+	}
+	for i, op := range ops {
+		tok := e.Token(fmt.Sprintf("t%d", i), "admin") // a fresh bucket each
+		api(t, e, tok, "GET", "/api/v1/whoami", nil)   // uses the one request
+		req, _ := http.NewRequest(op.method, e.Srv.URL+op.path, nil)
+		req.Header.Set("Authorization", "Bearer "+tok)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 429 || resp.Header.Get("Retry-After") == "" {
+			t.Errorf("%s %s over the limit: %d %q", op.method, op.path, resp.StatusCode, resp.Header.Get("Retry-After"))
+		}
 	}
 }
