@@ -18,6 +18,16 @@ func TestSign(t *testing.T) {
 	}
 	s2, _ := LoadOrCreate(p) // same key on restart
 	sig := s.Sign("aZ3k9QxP", 2000)
+	// Flip a character in the middle (the last base64 character carries
+	// padding bits that decoding ignores, so it is no place to tamper).
+	flip := map[byte]byte{'A': 'B'}
+	c := sig[10]
+	if r, ok := flip[c]; ok {
+		c = r
+	} else {
+		c = 'A'
+	}
+	tampered := sig[:10] + string(c) + sig[11:]
 	if !s2.Valid("aZ3k9QxP", "2000", sig, 1999) {
 		t.Fatal("valid signature rejected")
 	}
@@ -25,10 +35,10 @@ func TestSign(t *testing.T) {
 		id, exp, sig string
 		now          int64
 	}{
-		{"aZ3k9QxP", "2000", sig, 2000},                 // expired
-		{"bZ3k9QxP", "2000", sig, 1},                    // other item
-		{"aZ3k9QxP", "3000", sig, 1},                    // extended expiry
-		{"aZ3k9QxP", "2000", sig[:len(sig)-1] + "A", 1}, // tampered
+		{"aZ3k9QxP", "2000", sig, 2000},   // expired
+		{"bZ3k9QxP", "2000", sig, 1},      // other item
+		{"aZ3k9QxP", "3000", sig, 1},      // extended expiry
+		{"aZ3k9QxP", "2000", tampered, 1}, // tampered
 		{"aZ3k9QxP", "x", sig, 1},
 		{"aZ3k9QxP", "2000", "", 1},
 		{"aZ3k9QxP", "2000", "!!!", 1},
