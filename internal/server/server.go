@@ -38,6 +38,7 @@ type Server struct {
 	renderCache *render.Cache
 	signer      *sign.Signer
 	usage       *usage.Tracker
+	tus         *resumable
 	chromaCSS   []byte
 	log         *slog.Logger
 	mux         *http.ServeMux
@@ -101,6 +102,9 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		log:         log,
 		mux:         http.NewServeMux(),
 	}
+	if err := s.setupResumable(); err != nil {
+		return nil, err
+	}
 	s.routes()
 	return s, nil
 }
@@ -126,6 +130,13 @@ func (s *Server) routes() {
 	m.Handle("GET /api/v1/collections/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleGetCollection)))
 	m.Handle("PATCH /api/v1/collections/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handlePatchCollection)))
 	m.Handle("DELETE /api/v1/collections/{id}", s.auth(store.ScopeDelete, http.HandlerFunc(s.handleDeleteCollection)))
+	up := func(h http.Handler) http.Handler { return s.auth(store.ScopeUpload, h) }
+	m.Handle("POST /api/v1/uploads", up(s.tusRoute(s.tus.h.PostFile, false)))
+	m.Handle("POST /api/v1/uploads/", up(s.tusRoute(s.tus.h.PostFile, false)))
+	m.Handle("HEAD /api/v1/uploads/{id}", up(s.tusRoute(s.tus.h.HeadFile, true)))
+	m.Handle("PATCH /api/v1/uploads/{id}", up(s.tusRoute(s.tus.h.PatchFile, true)))
+	m.Handle("DELETE /api/v1/uploads/{id}", up(s.tusRoute(s.tus.h.DelFile, true)))
+	m.Handle("GET /api/v1/uploads/{id}/item", up(http.HandlerFunc(s.handleUploadItem)))
 	m.Handle("GET /api/v1/search", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleSearch)))
 	m.Handle("GET /api/v1/items/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleGetItem)))
 	m.Handle("PATCH /api/v1/items/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handlePatchItem)))

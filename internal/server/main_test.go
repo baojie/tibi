@@ -15,9 +15,9 @@ import (
 func TestMain(m *testing.M) {
 	code := m.Run()
 	if code == 0 && flag.Lookup("test.run").Value.String() == "" {
-		missing := testutil.UncoveredResponses(
+		missing := testutil.UncoveredResponses(append(testutil.TusOperations,
 			"GET /healthz 503", // needs a broken database
-		)
+		)...)
 		if len(missing) > 0 {
 			fmt.Fprintln(os.Stderr, "API contract: documented responses never exercised by the tests:")
 			for _, m := range missing {

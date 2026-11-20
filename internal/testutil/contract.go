@@ -41,6 +41,10 @@ func contractChecked(t testing.TB, h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
+		if tusProtocol(r) {
+			h.ServeHTTP(w, r) // tus requests follow the tus spec (tested on their own)
+			return
+		}
 		rec := &recorder{ResponseWriter: w, status: 200}
 		h.ServeHTTP(rec, r)
 		if _, ok := s.Match(r.Method, r.URL.Path); !ok && rec.status == 404 {
@@ -99,4 +103,17 @@ func UncoveredResponses(exempt ...string) []string {
 	}
 	sort.Strings(missing)
 	return missing
+}
+
+// tusProtocol reports requests of the tus protocol itself (not /item).
+func tusProtocol(r *http.Request) bool {
+	return strings.HasPrefix(r.URL.Path, "/api/v1/uploads") && !strings.HasSuffix(r.URL.Path, "/item")
+}
+
+// TusOperations are excluded from response coverage, like their validation.
+var TusOperations = []string{
+	"POST /api/v1/uploads/ 201", "POST /api/v1/uploads/ 400", "POST /api/v1/uploads/ 401", "POST /api/v1/uploads/ 403", "POST /api/v1/uploads/ 413",
+	"HEAD /api/v1/uploads/{id} 200", "HEAD /api/v1/uploads/{id} 404",
+	"PATCH /api/v1/uploads/{id} 204", "PATCH /api/v1/uploads/{id} 400", "PATCH /api/v1/uploads/{id} 404", "PATCH /api/v1/uploads/{id} 409",
+	"DELETE /api/v1/uploads/{id} 204", "DELETE /api/v1/uploads/{id} 404",
 }

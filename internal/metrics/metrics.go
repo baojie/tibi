@@ -13,11 +13,12 @@ import (
 
 // Counters of this process.
 var (
-	UploadBytes   atomic.Int64 // bytes of items stored by uploads
-	ServedBytes   atomic.Int64 // raw/download/thumbnail bytes sent
-	GCItems       atomic.Int64 // item rows purged
-	GCBlobs       atomic.Int64 // blobs deleted
-	UsageFlushErr atomic.Int64
+	UploadBytes    atomic.Int64 // bytes of items stored by uploads
+	ResumableBytes atomic.Int64 // bytes received by resumable (tus) PATCH requests
+	ServedBytes    atomic.Int64 // raw/download/thumbnail bytes sent
+	GCItems        atomic.Int64 // item rows purged
+	GCBlobs        atomic.Int64 // blobs deleted
+	UsageFlushErr  atomic.Int64
 
 	reqMu    sync.Mutex
 	requests = map[[2]string]int64{} // {method, code} → count
@@ -54,6 +55,7 @@ func Write(w io.Writer, gauges []Gauge) {
 	}
 	reqMu.Unlock()
 	counter("tibi_upload_bytes_total", "Bytes stored by uploads.", UploadBytes.Load())
+	counter("tibi_resumable_received_bytes_total", "Bytes received by resumable upload requests.", ResumableBytes.Load())
 	counter("tibi_served_bytes_total", "Bytes of item content sent (raw, download, thumbnails).", ServedBytes.Load())
 	counter("tibi_gc_items_total", "Item rows purged by garbage collection.", GCItems.Load())
 	counter("tibi_gc_blobs_total", "Blobs deleted by garbage collection.", GCBlobs.Load())

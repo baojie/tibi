@@ -1,6 +1,6 @@
 module tibi
 
-go 1.26.3
+go 1.26.11
 
 require (
 	github.com/BurntSushi/toml v1.6.0
@@ -10,6 +10,7 @@ require (
 	github.com/minio/minio-go/v7 v7.4.1
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d
 	github.com/spf13/pflag v1.1.0
+	github.com/tus/tusd/v2 v2.10.2
 	github.com/yuin/goldmark v1.8.7
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	golang.org/x/image v0.48.0
@@ -38,6 +39,7 @@ require (
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/exp v0.0.0-20260813180055-c1d0aacb2297 // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect

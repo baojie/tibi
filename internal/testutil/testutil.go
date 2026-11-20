@@ -26,6 +26,7 @@ type Env struct {
 	T        *testing.T
 	Srv      *httptest.Server
 	Instance *app.Instance
+	Server   *server.Server
 	Cfg      config.Server
 	offset   atomic.Int64 // clock offset in nanoseconds
 }
@@ -90,6 +91,7 @@ func New(t *testing.T, mod func(*config.Server)) *Env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	e.Server = h
 	srv.Config.Handler = contractChecked(t, h)
 	srv.Start()
 	t.Cleanup(func() {

@@ -31,7 +31,7 @@ import (
 )
 
 // Version is set at build time via -ldflags "-X tibi/internal/app.Version=...".
-var Version = "0.0.12"
+var Version = "0.0.13"
 
 // Instance is an opened data directory.
 type Instance struct {
@@ -136,6 +136,22 @@ func Serve(args []string, stderr io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go gc.Loop(ctx, in.Store, in.Blobs, gc.Interval, log)
+	go func() { // abandoned resumable uploads
+		t := time.NewTicker(gc.Interval)
+		defer t.Stop()
+		for {
+			if n, err := h.CleanupUploads(ctx); err != nil && ctx.Err() == nil {
+				log.Error("upload cleanup", "err", err)
+			} else if n > 0 {
+				log.Info("removed abandoned uploads", "uploads", n)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
 	usageDone := make(chan struct{})
 	go func() { h.UsageLoop(ctx); close(usageDone) }()
 	defer func() { stop(); <-usageDone }() // final flush before the DB closes
