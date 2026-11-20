@@ -1,4 +1,4 @@
-# tibi API 0.0.17
+# tibi API 0.1.0
 
 <!-- Generated from api/openapi.yaml by `go run ./tools/apidoc`. Do not edit. -->
 

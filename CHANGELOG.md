@@ -4,7 +4,18 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
-## [Unreleased]
+## [0.1.0] — Feature-complete release
+
+Everything PLAN.md set out to build, reviewed and hardened: image hosting
+and pastes, S3/Backblaze B2 storage, media and HEIC, search, collections,
+encrypted pastes, resumable uploads, cost controls, and clients for the
+command line, the web, Chrome, Android, ShareX/Flameshot/PicGo, ACDSeeN
+and AI agents (MCP). No new features in this release: an independent
+security review of the server (A8) and the end-to-end encryption (A9),
+its fixes (below, each re-verified by the reviewers), a full regression
+on local disk, an S3-compatible store and a real Backblaze B2 bucket, the
+documentation, and the license (AGPL-3.0-only). `docs/ACCEPTANCE.md`
+records how every acceptance criterion of 0.0.1–0.0.17 is checked.
 
 ### Security
 Fixes from an independent review of the security model (A8) and the
