@@ -19,6 +19,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"tibi/internal/backup"
 	"tibi/internal/blob"
 	"tibi/internal/config"
 	"tibi/internal/gc"
@@ -30,7 +31,7 @@ import (
 )
 
 // Version is set at build time via -ldflags "-X tibi/internal/app.Version=...".
-var Version = "0.0.9"
+var Version = "0.0.10"
 
 // Instance is an opened data directory.
 type Instance struct {
@@ -135,6 +136,9 @@ func Serve(args []string, stderr io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go gc.Loop(ctx, in.Store, in.Blobs, gc.Interval, log)
+	usageDone := make(chan struct{})
+	go func() { h.UsageLoop(ctx); close(usageDone) }()
+	defer func() { stop(); <-usageDone }() // final flush before the DB closes
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	log.Info("listening", "addr", cfg.Listen, "base_url", cfg.BaseURL, "data_dir", cfg.DataDir,
@@ -159,6 +163,11 @@ const adminUsage = `usage:
   tibi admin token revoke N
   tibi admin gc [--orphans]     remove expired/deleted items and unused blobs now;
                                 --orphans also scans storage for unreferenced blobs
+  tibi admin stats              storage, items, traffic, most-served items
+  tibi admin export --out FILE.tar.zst
+                                all live items, collections, tokens and blobs
+  tibi admin import FILE.tar.zst
+                                restore an export into an empty instance
   tibi admin blobs migrate --to s3|fs [--workers 8]
                                 copy all blobs to the other backend (verified,
                                 resumable); then switch storage.backend
@@ -171,6 +180,16 @@ func Admin(args []string, stdout, stderr io.Writer) error {
 	}
 	if len(args) >= 2 && args[0] == "blobs" && args[1] == "migrate" {
 		return adminMigrate(args[2:], stdout, stderr)
+	}
+	if len(args) >= 1 {
+		switch args[0] {
+		case "stats":
+			return adminStats(args[1:], stdout, stderr)
+		case "export":
+			return adminExport(args[1:], stdout, stderr)
+		case "import":
+			return adminImport(args[1:], stdout, stderr)
+		}
 	}
 	if len(args) < 2 || args[0] != "token" {
 		fmt.Fprint(stderr, adminUsage)
@@ -348,5 +367,120 @@ func adminMigrate(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("migration incomplete (re-run to resume): %w", err)
 	}
 	fmt.Fprintf(stdout, "done. Now set storage.backend = %q in the config and restart the server.\n", *to)
+	return nil
+}
+
+// openForAdmin parses --config (plus extra flags) and opens the instance.
+func openForAdmin(name string, args []string, stderr io.Writer, extra func(*pflag.FlagSet)) (*Instance, *pflag.FlagSet, error) {
+	fs := pflag.NewFlagSet(name, pflag.ContinueOnError)
+	fs.SetOutput(stderr)
+	cfgPath := configFlag(fs)
+	if extra != nil {
+		extra(fs)
+	}
+	if err := fs.Parse(args); err != nil {
+		return nil, nil, err
+	}
+	cfg, err := loadConfig(*cfgPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	in, err := Open(cfg)
+	return in, fs, err
+}
+
+func adminStats(args []string, stdout, stderr io.Writer) error {
+	in, _, err := openForAdmin("admin stats", args, stderr, nil)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	ctx := context.Background()
+	st, err := in.Store.Stats(ctx, 10)
+	if err != nil {
+		return err
+	}
+	_, today, err := in.Store.DailyUsage(ctx, time.Now().UTC().Format("2006-01-02"))
+	if err != nil {
+		return err
+	}
+	tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintf(tw, "items:\t%d\n", st.Items)
+	for _, k := range []string{"image", "video", "audio", "text", "file", "encrypted"} {
+		if n := st.ItemsByKind[k]; n > 0 {
+			fmt.Fprintf(tw, "  %s:\t%d\n", k, n)
+		}
+	}
+	fmt.Fprintf(tw, "collections:\t%d\n", st.Collections)
+	fmt.Fprintf(tw, "tokens:\t%d\n", st.Tokens)
+	fmt.Fprintf(tw, "storage used:\t%s (items total %s)\n", units.FormatBytes(st.StorageBytes), units.FormatBytes(st.LogicalBytes))
+	fmt.Fprintf(tw, "served today:\t%s (UTC day; up to 10s behind a running server)\n", units.FormatBytes(today))
+	fmt.Fprintf(tw, "served total:\t%s\n", units.FormatBytes(st.BytesServed))
+	tw.Flush()
+	if len(st.Top) > 0 {
+		fmt.Fprintln(stdout, "\nmost served:")
+		tw = tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
+		for _, it := range st.Top {
+			name := it.Title
+			if name == "" {
+				name = it.Filename
+			}
+			fmt.Fprintf(tw, "  %s/%s\t%s\t%d views\t%s\n", in.Cfg.BaseURL, it.ID, units.FormatBytes(it.BytesServed), it.ViewCount, name)
+		}
+		tw.Flush()
+	}
+	return nil
+}
+
+func adminExport(args []string, stdout, stderr io.Writer) error {
+	var out string
+	in, _, err := openForAdmin("admin export", args, stderr, func(fs *pflag.FlagSet) {
+		fs.StringVar(&out, "out", "", "archive to write (.tar.zst)")
+	})
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	if out == "" {
+		return errors.New("usage: tibi admin export --out FILE.tar.zst")
+	}
+	f, err := os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	m, err := backup.Export(context.Background(), in.Store, in.Blobs, in.Cfg.SecretKeyPath(), Version, f)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(out)
+		return err
+	}
+	fmt.Fprintf(stdout, "exported %d items, %d collections, %d tokens, %d blobs to %s\n", m.Items, m.Collections, m.Tokens, m.Blobs, out)
+	fmt.Fprintln(stderr, "the archive holds private items, token hashes and the share-link key: keep it safe")
+	return nil
+}
+
+func adminImport(args []string, stdout, stderr io.Writer) error {
+	in, fs, err := openForAdmin("admin import", args, stderr, nil)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	if fs.NArg() != 1 {
+		return errors.New("usage: tibi admin import FILE.tar.zst")
+	}
+	f, err := os.Open(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	res, err := backup.Import(context.Background(), in.Store, in.Blobs, in.Cfg.SecretKeyPath(), in.Tmp, f)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "imported %d items, %d collections, %d tokens (%d already present), %d blobs\n",
+		res.Items, res.Collections, res.Tokens-res.TokensKept, res.TokensKept, res.Blobs)
+	fmt.Fprintln(stderr, "restart the server so it picks up the imported share-link key")
 	return nil
 }
