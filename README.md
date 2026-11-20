@@ -10,7 +10,8 @@ Status: early development (see `CHANGELOG.md`). The design and roadmap live in
 
 Install: release binaries, a `.deb` with a systemd unit, or the Docker
 image — see `docs/DEPLOY.md`. Upload from the CLI, curl, the web page,
-ShareX, Flameshot or PicGo — see `docs/CLIENTS.md`.
+ShareX, Flameshot, PicGo, or AI agents via MCP (`tibi mcp`) — see
+`docs/CLIENTS.md`.
 
 ## Quick start (from source)
 

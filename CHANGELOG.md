@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.12] — MCP server
+
+### Added
+- `tibi mcp`: a Model Context Protocol server on stdio (protocol versions
+  2024-11-05, 2025-03-26 and 2025-06-18) using the CLI's login. Tools:
+  `upload_file`, `paste_text`, `list_items`, `search_items`, `delete_item`,
+  with descriptions, input schemas, annotations (read-only / destructive)
+  and structured results. Uploads are tagged `source=mcp`.
+- Bad tokens, oversized files, unknown languages, missing files and an
+  unreachable server are returned as tool errors (`isError`) with an
+  actionable message; protocol errors use JSON-RPC codes; the session keeps
+  working after any of them.
+- `docs/CLIENTS.md`: setup for Claude Code, Claude Desktop and other MCP
+  clients. Verified with the official MCP TypeScript SDK client.
+
 ## [0.0.11] — Packaging and ecosystem
 
 ### Added

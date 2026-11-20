@@ -84,3 +84,45 @@ picgo use uploader tibi
 
 In the PicGo or PicList app, install the plugin from that folder and fill
 in the same settings.
+
+## AI agents (MCP)
+
+`tibi mcp` is a [Model Context Protocol](https://modelcontextprotocol.io)
+server on stdio. It uses the same server and token as the CLI (`tibi login`,
+or `TIBI_SERVER` / `TIBI_TOKEN`), so log in once first. Agents get five
+tools:
+
+| tool | does |
+|---|---|
+| `upload_file(path, title?, expires?, private?)` | upload a local file, return its URL (and Markdown for images) |
+| `paste_text(text, lang?, title?, expires?, private?)` | publish text or code as a highlighted paste |
+| `list_items(limit?, kind?)` | recent uploads |
+| `search_items(query)` | full-text search |
+| `delete_item(id)` | delete by ID or URL |
+
+Uploads are tagged `source=mcp`. Failures (bad token, file too large,
+server down) come back as tool errors the agent can read and act on.
+
+**Claude Code**
+
+```sh
+claude mcp add tibi -- tibi mcp            # this project
+claude mcp add --scope user tibi -- tibi mcp   # all projects
+```
+
+Then ask, for example, "share this diff as a paste" or "upload
+coverage.html and give me the link".
+
+**Claude Desktop, Cursor, and other clients** take a JSON entry like:
+
+```json
+{
+  "mcpServers": {
+    "tibi": { "command": "tibi", "args": ["mcp"] }
+  }
+}
+```
+
+Add `"env": {"TIBI_SERVER": "https://tibi.example.com", "TIBI_TOKEN": "tibi_…"}`
+if the client does not see your CLI login. Give agents a token with only the
+scopes they need (`upload`, plus `delete` if they may delete).
