@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.7] — Search and API contract
+
+### Added
+- Full-text search over titles, filenames and text content (first 1 MiB):
+  `GET /api/v1/search?q=…` and `tibi search`. Every word must match; words
+  of three or more characters match anywhere (identifier substrings, via an
+  FTS5 trigram index); Chinese, Japanese and Korean match any substring,
+  including one or two characters (CJK bigrams); case-insensitive. Results
+  are newest first, paginated, with a snippet of the matching line. Deleted,
+  expired and encrypted items never appear.
+- Existing items are indexed automatically when the server starts.
+- `api/openapi.yaml` now documents every endpoint and response. The test
+  suite validates every API response against it (types, required fields,
+  undocumented fields, status codes, content types) and fails if any
+  documented response is never exercised.
+- `docs/API.md`, generated from the spec (`go run ./tools/apidoc`); a test
+  fails when it is out of date.
+
 ## [0.0.6] — Media: video, audio, HEIC, thumbnails
 
 ### Added

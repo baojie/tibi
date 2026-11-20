@@ -1,110 +1,142 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.6
+  version: 0.0.7
   description: |
-    Self-hosted image host + pastebin. Upload anything, get back a URL.
-    This file is the source of truth for /api/v1.
+    tibi (题壁) is a self-hosted image host and pastebin: upload an image, a
+    text or code snippet, or any file, and get back a URL to share.
+
+    This document is the source of truth for `/api/v1`. It is served at
+    `/api/v1/openapi.yaml`, and the test suite checks every API response
+    against it.
+
+    **Authentication.** Send `Authorization: Bearer tibi_…`. Tokens carry
+    scopes: `upload` (upload, list, search, view metadata, change metadata),
+    `delete`, `read_private` (see private items on public URLs) and `admin`
+    (all of them).
+
+    **Errors** use one envelope: `{"error": {"code": "…", "message": "…"}}`.
+
+    **Public URLs** (not part of this API) are fixed forever:
+    `/{id}` view page, `/{id}.{ext}` raw bytes for embedding, `/{id}/raw`,
+    `/{id}/dl` download, `/{id}/thumb` image thumbnail, `/s/{slug}` short
+    link. Raw routes support `Range`.
 servers:
   - url: /
 security:
   - bearer: []
+tags:
+  - name: items
+    description: Upload, list, inspect, change and delete items.
+  - name: search
+  - name: meta
+    description: Server and token information.
 paths:
   /healthz:
     get:
+      tags: [meta]
       summary: Liveness probe
+      operationId: healthz
       security: []
       responses:
         "200":
-          description: Server is up
+          description: The server and its database are up.
+          content:
+            text/plain:
+              schema: { type: string }
+        "503":
+          description: The database is unavailable.
           content:
             text/plain:
               schema: { type: string }
   /api/v1/openapi.yaml:
     get:
-      summary: This contract
+      tags: [meta]
+      summary: This document
+      operationId: openapi
       security: []
       responses:
         "200":
-          description: OpenAPI document
+          description: The OpenAPI document.
           content:
             application/yaml:
               schema: { type: string }
   /api/v1/whoami:
     get:
+      tags: [meta]
       summary: Describe the calling token
+      description: Any valid token may call this; clients use it to verify a login.
+      operationId: whoami
       responses:
         "200":
-          description: Token info
+          description: The token's name, scopes and quota.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Whoami" }
         "401": { $ref: "#/components/responses/Unauthorized" }
   /api/v1/items:
     post:
+      tags: [items]
       summary: Upload one or more items
+      operationId: upload
       description: |
-        Two forms:
+        Requires scope `upload`. Two request forms:
 
-        **A. multipart/form-data** — one or more `file` parts plus optional
-        form fields (`title`, `kind`, `lang`, `keep_meta`, `expires`,
-        `visibility`, `slug`, `burn_after_read`, `source`, `meta`). Each
-        part's filename is used. Fields may come before or after the files.
-        One file → an Item object; several → an array of Items, in order.
+        - **multipart/form-data** — one or more `file` parts, plus optional
+          form fields with the same names as the query parameters below.
+          Fields may come before or after the files. Each part's filename is
+          used. One file returns an Item; several return an array, in order.
+        - **raw body** — the body is the content. Options are query
+          parameters, or headers named `X-Tibi-` plus the parameter name in
+          title case with dashes (`X-Tibi-Filename`, `X-Tibi-Keep-Meta`,
+          `X-Tibi-Burn-After-Read`, …).
 
-        **B. raw body** — the body is the content. Options are query
-        parameters or the equivalent `X-Tibi-*` headers (`X-Tibi-Filename`,
-        `X-Tibi-Title`, `X-Tibi-Kind`, `X-Tibi-Lang`, `X-Tibi-Keep-Meta`,
-        `X-Tibi-Expires`, `X-Tibi-Visibility`, `X-Tibi-Slug`, `X-Tibi-Burn-After-Read`, `X-Tibi-Source`,
-        `X-Tibi-Meta`).
+        The kind is detected from the content:
 
-        The kind is detected from the content: PNG/JPEG/GIF/WebP/AVIF →
-        `image` (HEIC/HEIF photos are converted to JPEG when the server has
-        a converter, with `orig_mime` recording the original; otherwise they
-        are stored as `file`); MP4/WebM/MOV → `video`; MP3/Ogg/Opus/M4A/WAV/
-        FLAC → `audio`; valid UTF-8 text → `text`; text in a recognizable legacy
-        charset (GBK/GB18030, Big5, Shift_JIS, EUC-JP, EUC-KR, Latin-1,
-        UTF-16 with BOM) is transcoded to UTF-8 (the original bytes are not
-        kept) and becomes `text` with `charset` set; everything else, including SVG,
-        HTML, XHTML and JavaScript, → `file`. EXIF (incl. GPS), XMP and text
-        metadata are stripped losslessly from JPEG/PNG/WebP unless
-        `keep_meta=1` (JPEG orientation is kept). Requires scope `upload`.
+        | kind | formats |
+        |---|---|
+        | `image` | PNG, JPEG, GIF, WebP, AVIF; HEIC/HEIF converted to JPEG when the server has a converter (`orig_mime` keeps the original type) |
+        | `video` | MP4, WebM, MOV |
+        | `audio` | MP3, Ogg, Opus, M4A, WAV, FLAC |
+        | `text` | valid UTF-8 text; GBK/GB18030, Big5, Shift_JIS, EUC-JP, EUC-KR, Latin-1 and UTF-16 (with BOM) are converted to UTF-8 and `charset` records the original |
+        | `file` | everything else, and always SVG, HTML, XHTML and JavaScript (never rendered) |
+
+        EXIF (including GPS), XMP and text metadata are removed losslessly
+        from JPEG, PNG and WebP unless `keep_meta=1`; JPEG orientation is
+        kept. Identical content is stored once.
       parameters:
-        - { name: filename, in: query, schema: { type: string } }
+        - { name: filename, in: query, schema: { type: string }, description: "Original file name (multipart parts carry their own)." }
         - { name: title, in: query, schema: { type: string } }
         - name: kind
           in: query
-          description: force the kind; images and media cannot be forced
+          description: Force `text` or `file`; media kinds cannot be forced.
           schema: { type: string, enum: [text, file] }
         - name: lang
           in: query
-          description: |
-            language for syntax highlighting (a name, alias or extension,
-            e.g. `python`, `py`, `go`); inferred from filename and content
-            when omitted; unknown names are rejected with 400
+          description: Highlighting language (name, alias or extension, e.g. `python`, `py`); inferred when omitted; unknown names are rejected.
           schema: { type: string }
         - name: keep_meta
           in: query
-          description: keep image metadata (EXIF/GPS/XMP)
+          description: Keep image metadata (EXIF, GPS, XMP).
           schema: { type: string, enum: ["0", "1", "true", "false"] }
         - name: expires
           in: query
-          description: "lifetime: e.g. 10m, 1h, 7d, 30d, never (default: server default_expires)"
+          description: Lifetime, e.g. `10m`, `1h`, `7d`, `30d`, or `never`. Default is the server's `default_expires`.
           schema: { type: string }
         - name: visibility
           in: query
-          description: "private items are served only to tokens with read_private"
+          description: "`private` items are served only to tokens with `read_private`."
           schema: { type: string, enum: [unlisted, private], default: unlisted }
         - name: slug
           in: query
-          description: "custom short link /s/{slug}: [a-z0-9-]{3,64}, not reserved; moves from any item that had it; single-file uploads only"
+          description: "Short link `/s/{slug}`: 3–64 characters of `a-z`, `0-9` and `-`, not a reserved word. Moves from any item that had it. Single-file uploads only."
           schema: { type: string }
         - name: burn_after_read
           in: query
-          description: "delete after the first reveal by a client without a read_private token"
+          description: Delete the item when it is first revealed by a visitor without a `read_private` token.
           schema: { type: string, enum: ["0", "1", "true", "false"] }
-        - { name: source, in: query, schema: { type: string }, description: "client tag, e.g. cli, chrome, adseen" }
-        - { name: meta, in: query, schema: { type: string }, description: "JSON object of client metadata" }
+        - { name: source, in: query, schema: { type: string }, description: "Client tag, e.g. `cli`, `chrome`, `adseen`." }
+        - { name: meta, in: query, schema: { type: string }, description: "Client metadata (a JSON object as text)." }
       requestBody:
         required: true
         content:
@@ -115,9 +147,7 @@ paths:
               type: object
               required: [file]
               properties:
-                file:
-                  type: array
-                  items: { type: string, format: binary }
+                file: { type: array, items: { type: string, format: binary } }
                 title: { type: string }
                 kind: { type: string, enum: [text, file] }
                 lang: { type: string }
@@ -130,58 +160,62 @@ paths:
                 meta: { type: string }
       responses:
         "201":
-          description: Item(s) created — an object for one file, an array for several
+          description: Created. An Item for one file, an array of Items for several.
           content:
             application/json:
               schema:
                 oneOf:
                   - { $ref: "#/components/schemas/Item" }
-                  - { type: array, items: { $ref: "#/components/schemas/Item" } }
-        "400": { $ref: "#/components/responses/Error" }
+                  - { type: array, minItems: 2, items: { $ref: "#/components/schemas/Item" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Error" }
-        "413": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/TooLarge" }
     get:
+      tags: [items]
       summary: List items, newest first
-      description: Live items only (not deleted or expired), including private ones. Requires scope `upload`.
+      operationId: listItems
+      description: Live items (not deleted or expired), including private ones. Requires scope `upload`.
       parameters:
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
-        - { name: cursor, in: query, schema: { type: string }, description: "next_cursor from the previous page" }
-        - { name: kind, in: query, schema: { type: string, enum: [image, video, audio, text, file, encrypted] } }
-        - { name: source, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/limit" }
+        - { $ref: "#/components/parameters/cursor" }
+        - { $ref: "#/components/parameters/kind" }
+        - { name: source, in: query, schema: { type: string }, description: Only items uploaded with this `source` tag. }
       responses:
         "200":
-          description: A page of items
+          description: A page of items.
           content:
             application/json:
-              schema:
-                type: object
-                required: [items, next_cursor]
-                properties:
-                  items: { type: array, items: { $ref: "#/components/schemas/Item" } }
-                  next_cursor: { type: [string, "null"] }
-        "400": { $ref: "#/components/responses/Error" }
+              schema: { $ref: "#/components/schemas/ItemPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/items/{id}:
     parameters:
-      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: id, in: path, required: true, schema: { type: string, pattern: "^[0-9A-Za-z]{8}$" } }
     get:
-      summary: Item metadata (any visibility)
-      description: Requires scope `upload`.
+      tags: [items]
+      summary: Item metadata
+      operationId: getItem
+      description: Any visibility. Requires scope `upload`.
       responses:
         "200":
-          description: The item
+          description: The item.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Item" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     patch:
-      summary: Change metadata (content is immutable)
+      tags: [items]
+      summary: Change metadata
+      operationId: patchItem
       description: |
-        Only `title`, `lang` (text items), `visibility`, `expires` (relative
-        to now, or `never`) and `slug` (empty string clears it) may be set;
-        any other field is rejected. Requires scope `upload`.
+        Content is immutable. Only these fields can be set: `title`, `lang`
+        (text items), `visibility`, `expires` (relative to now, or `never`)
+        and `slug` (an empty string removes it). Any other field is
+        rejected. Requires scope `upload`.
       requestBody:
         required: true
         content:
@@ -197,82 +231,173 @@ paths:
                 slug: { type: string }
       responses:
         "200":
-          description: The updated item
+          description: The updated item.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Item" }
-        "400": { $ref: "#/components/responses/Error" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
+      tags: [items]
       summary: Delete an item
-      description: Soft delete; the item 404s at once and is purged after a day. Requires scope `delete`.
+      operationId: deleteItem
+      description: The item returns 404 at once and is purged after a day. Requires scope `delete`.
       responses:
-        "204": { description: Deleted }
+        "204": { description: Deleted. }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/search:
+    get:
+      tags: [search]
+      summary: Full-text search
+      operationId: search
+      description: |
+        Finds live items whose title, filename or text contain **every**
+        word of `q`, newest first. Words of three or more characters match
+        anywhere, including inside identifiers (`Upload` finds
+        `handleUpload`); shorter words match word starts. Chinese, Japanese
+        and Korean match any substring, including one or two characters.
+        Matching ignores case. Encrypted items are never indexed. Requires
+        scope `upload`.
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, maxLength: 500 } }
+        - { $ref: "#/components/parameters/kind" }
+        - { $ref: "#/components/parameters/limit" }
+        - { $ref: "#/components/parameters/cursor" }
+      responses:
+        "200":
+          description: A page of matches.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 components:
   securitySchemes:
     bearer:
       type: http
       scheme: bearer
-      description: "API token, format `tibi_` + 32 base62 characters"
+      description: "API token: `tibi_` followed by 32 letters and digits."
+  parameters:
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    cursor:
+      name: cursor
+      in: query
+      description: The `next_cursor` of the previous page.
+      schema: { type: string }
+    kind:
+      name: kind
+      in: query
+      schema: { $ref: "#/components/schemas/Kind" }
   responses:
-    Error:
-      description: Error
+    BadRequest:
+      description: The request is invalid; `message` says why.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Unauthorized:
-      description: Missing, invalid, or revoked token
+      description: The token is missing, invalid or revoked.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: The token lacks the required scope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No such item (or it was deleted or has expired).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooLarge:
+      description: The upload exceeds `max_upload_bytes`.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    Kind:
+      type: string
+      enum: [image, video, audio, text, file, encrypted]
     Error:
       type: object
+      additionalProperties: false
       required: [error]
       properties:
         error:
           type: object
+          additionalProperties: false
           required: [code, message]
           properties:
-            code: { type: string }
+            code:
+              type: string
+              enum: [bad_request, empty, unauthorized, forbidden, not_found, too_large, internal]
             message: { type: string }
     Whoami:
       type: object
-      required: [name, scopes]
+      additionalProperties: false
+      required: [name, scopes, quota_bytes]
       properties:
         name: { type: string }
-        scopes: { type: array, items: { type: string, enum: [upload, read_private, delete, admin] } }
-        quota_bytes: { type: [integer, "null"] }
+        scopes:
+          type: array
+          items: { type: string, enum: [upload, read_private, delete, admin] }
+        quota_bytes: { type: [integer, "null"], description: Upload quota in bytes; null for unlimited. }
     Item:
       type: object
-      required: [id, kind, url, raw_url, download_url, markdown, mime, size, visibility, expires_at, created_at]
+      additionalProperties: false
+      required: [id, kind, url, raw_url, download_url, markdown, mime, size, visibility, burn_after_read, view_count, expires_at, created_at]
       properties:
         id: { type: string, pattern: "^[0-9A-Za-z]{8}$" }
-        kind: { type: string, enum: [image, video, audio, text, file, encrypted] }
-        url: { type: string, format: uri }
-        raw_url: { type: string, format: uri }
+        kind: { $ref: "#/components/schemas/Kind" }
+        url: { type: string, format: uri, description: View page. }
+        raw_url: { type: string, format: uri, description: "Raw bytes, `/{id}.{ext}`: the URL to embed." }
         download_url: { type: string, format: uri }
-        mime: { type: string }
-        size: { type: integer, description: "stored bytes (after metadata stripping)" }
-        width: { type: integer, description: "images: display width (EXIF rotation applied)" }
-        height: { type: integer, description: "images: display height" }
-        markdown: { type: string, description: "![](raw_url) for images, [name](url) otherwise" }
-        duration_ms: { type: integer, description: "video/audio length, when cheaply known (MP4/MOV/M4A, WAV)" }
-        orig_mime: { type: string, description: "original type when the upload was converted, e.g. image/heic" }
-        thumbnail_url: { type: string, format: uri, description: "images: WebP thumbnail, 400px wide" }
+        markdown: { type: string, description: "`![](raw_url)` for images, `[name](url)` otherwise." }
+        mime: { type: string, description: Type of the stored bytes. }
+        orig_mime: { type: string, description: "Original type when the upload was converted (e.g. `image/heic`)." }
+        size: { type: integer, description: Stored bytes (after metadata removal or conversion). }
+        width: { type: integer, description: "Images: display width (EXIF rotation applied)." }
+        height: { type: integer, description: "Images: display height." }
+        duration_ms: { type: integer, description: Video and audio length, when the container header has it. }
+        thumbnail_url: { type: string, format: uri, description: "Images: 400px-wide WebP thumbnail." }
         filename: { type: string }
         title: { type: string }
-        lang: { type: string, description: "text: canonical language, e.g. go, python, markdown, text" }
-        charset: { type: string, description: "text: original charset if transcoded to UTF-8, e.g. GBK" }
+        lang: { type: string, description: "Text: language, e.g. `go`, `python`, `markdown`, `text`." }
+        charset: { type: string, description: "Text: original charset when converted to UTF-8, e.g. `GBK`." }
         visibility: { type: string, enum: [unlisted, private] }
         slug: { type: string }
         slug_url: { type: string, format: uri }
         burn_after_read: { type: boolean }
         source: { type: string }
         view_count: { type: integer }
-        expires_at: { type: [integer, "null"] }
-        created_at: { type: integer }
+        expires_at: { type: [integer, "null"], description: Unix seconds; null for never. }
+        created_at: { type: integer, description: Unix seconds. }
+    ItemPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Item" } }
+        next_cursor: { type: [string, "null"], description: Pass as `cursor` for the next page; null on the last page. }
+    SearchHit:
+      description: An Item plus `snippet`, the line of text containing the first query word.
+      allOf:
+        - { $ref: "#/components/schemas/Item" }
+      properties:
+        snippet: { type: string }
+      unevaluatedProperties: false
+    SearchPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
+        next_cursor: { type: [string, "null"] }

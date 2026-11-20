@@ -90,7 +90,7 @@ func New(t *testing.T, mod func(*config.Server)) *Env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv.Config.Handler = h
+	srv.Config.Handler = contractChecked(t, h)
 	srv.Start()
 	t.Cleanup(func() {
 		srv.Close()

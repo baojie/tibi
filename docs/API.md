@@ -1,0 +1,338 @@
+# tibi API 0.0.7
+
+<!-- Generated from api/openapi.yaml by `go run ./tools/apidoc`. Do not edit. -->
+
+tibi (题壁) is a self-hosted image host and pastebin: upload an image, a
+text or code snippet, or any file, and get back a URL to share.
+
+This document is the source of truth for `/api/v1`. It is served at
+`/api/v1/openapi.yaml`, and the test suite checks every API response
+against it.
+
+**Authentication.** Send `Authorization: Bearer tibi_…`. Tokens carry
+scopes: `upload` (upload, list, search, view metadata, change metadata),
+`delete`, `read_private` (see private items on public URLs) and `admin`
+(all of them).
+
+**Errors** use one envelope: `{"error": {"code": "…", "message": "…"}}`.
+
+**Public URLs** (not part of this API) are fixed forever:
+`/{id}` view page, `/{id}.{ext}` raw bytes for embedding, `/{id}/raw`,
+`/{id}/dl` download, `/{id}/thumb` image thumbnail, `/s/{slug}` short
+link. Raw routes support `Range`.
+
+## Endpoints
+
+| method | path | summary |
+|---|---|---|
+| `GET` | [`/api/v1/items`](#get-api-v1-items) | List items, newest first |
+| `POST` | [`/api/v1/items`](#post-api-v1-items) | Upload one or more items |
+| `GET` | [`/api/v1/items/{id}`](#get-api-v1-items-id) | Item metadata |
+| `PATCH` | [`/api/v1/items/{id}`](#patch-api-v1-items-id) | Change metadata |
+| `DELETE` | [`/api/v1/items/{id}`](#delete-api-v1-items-id) | Delete an item |
+| `GET` | [`/api/v1/search`](#get-api-v1-search) | Full-text search |
+| `GET` | [`/api/v1/openapi.yaml`](#get-api-v1-openapi-yaml) | This document |
+| `GET` | [`/api/v1/whoami`](#get-api-v1-whoami) | Describe the calling token |
+| `GET` | [`/healthz`](#get-healthz) | Liveness probe |
+
+<a id="get-api-v1-items"></a>
+### `GET /api/v1/items`
+
+**List items, newest first**
+
+Live items (not deleted or expired), including private ones. Requires scope `upload`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `limit` | query | integer |  |
+| `cursor` | query | string | The `next_cursor` of the previous page. |
+| `kind` | query | [Kind](#schema-kind) |  |
+| `source` | query | string | Only items uploaded with this `source` tag. |
+
+| status | meaning | body |
+|---|---|---|
+| 200 | A page of items. | `application/json` [ItemPage](#schema-itempage) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+
+<a id="post-api-v1-items"></a>
+### `POST /api/v1/items`
+
+**Upload one or more items**
+
+Requires scope `upload`. Two request forms:
+
+- **multipart/form-data** — one or more `file` parts, plus optional
+  form fields with the same names as the query parameters below.
+  Fields may come before or after the files. Each part's filename is
+  used. One file returns an Item; several return an array, in order.
+- **raw body** — the body is the content. Options are query
+  parameters, or headers named `X-Tibi-` plus the parameter name in
+  title case with dashes (`X-Tibi-Filename`, `X-Tibi-Keep-Meta`,
+  `X-Tibi-Burn-After-Read`, …).
+
+The kind is detected from the content:
+
+| kind | formats |
+|---|---|
+| `image` | PNG, JPEG, GIF, WebP, AVIF; HEIC/HEIF converted to JPEG when the server has a converter (`orig_mime` keeps the original type) |
+| `video` | MP4, WebM, MOV |
+| `audio` | MP3, Ogg, Opus, M4A, WAV, FLAC |
+| `text` | valid UTF-8 text; GBK/GB18030, Big5, Shift_JIS, EUC-JP, EUC-KR, Latin-1 and UTF-16 (with BOM) are converted to UTF-8 and `charset` records the original |
+| `file` | everything else, and always SVG, HTML, XHTML and JavaScript (never rendered) |
+
+EXIF (including GPS), XMP and text metadata are removed losslessly
+from JPEG, PNG and WebP unless `keep_meta=1`; JPEG orientation is
+kept. Identical content is stored once.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `filename` | query | string | Original file name (multipart parts carry their own). |
+| `title` | query | string |  |
+| `kind` | query | string | Force `text` or `file`; media kinds cannot be forced. |
+| `lang` | query | string | Highlighting language (name, alias or extension, e.g. `python`, `py`); inferred when omitted; unknown names are rejected. |
+| `keep_meta` | query | string | Keep image metadata (EXIF, GPS, XMP). |
+| `expires` | query | string | Lifetime, e.g. `10m`, `1h`, `7d`, `30d`, or `never`. Default is the server's `default_expires`. |
+| `visibility` | query | string | `private` items are served only to tokens with `read_private`. |
+| `slug` | query | string | Short link `/s/{slug}`: 3–64 characters of `a-z`, `0-9` and `-`, not a reserved word. Moves from any item that had it. Single-file uploads only. |
+| `burn_after_read` | query | string | Delete the item when it is first revealed by a visitor without a `read_private` token. |
+| `source` | query | string | Client tag, e.g. `cli`, `chrome`, `adseen`. |
+| `meta` | query | string | Client metadata (a JSON object as text). |
+
+Request body: `application/octet-stream` (string (binary)), `multipart/form-data` (object)
+
+| status | meaning | body |
+|---|---|---|
+| 201 | Created. An Item for one file, an array of Items for several. | `application/json` [Item](#schema-item) or array of [Item](#schema-item) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 413 | The upload exceeds `max_upload_bytes`. | `application/json` [Error](#schema-error) |
+
+<a id="get-api-v1-items-id"></a>
+### `GET /api/v1/items/{id}`
+
+**Item metadata**
+
+Any visibility. Requires scope `upload`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+
+| status | meaning | body |
+|---|---|---|
+| 200 | The item. | `application/json` [Item](#schema-item) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+
+<a id="patch-api-v1-items-id"></a>
+### `PATCH /api/v1/items/{id}`
+
+**Change metadata**
+
+Content is immutable. Only these fields can be set: `title`, `lang`
+(text items), `visibility`, `expires` (relative to now, or `never`)
+and `slug` (an empty string removes it). Any other field is
+rejected. Requires scope `upload`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+
+Request body: `application/json` (object)
+
+| status | meaning | body |
+|---|---|---|
+| 200 | The updated item. | `application/json` [Item](#schema-item) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+
+<a id="delete-api-v1-items-id"></a>
+### `DELETE /api/v1/items/{id}`
+
+**Delete an item**
+
+The item returns 404 at once and is purged after a day. Requires scope `delete`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+
+| status | meaning | body |
+|---|---|---|
+| 204 | Deleted. | — |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+
+<a id="get-api-v1-search"></a>
+### `GET /api/v1/search`
+
+**Full-text search**
+
+Finds live items whose title, filename or text contain **every**
+word of `q`, newest first. Words of three or more characters match
+anywhere, including inside identifiers (`Upload` finds
+`handleUpload`); shorter words match word starts. Chinese, Japanese
+and Korean match any substring, including one or two characters.
+Matching ignores case. Encrypted items are never indexed. Requires
+scope `upload`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `q` | query, required | string |  |
+| `kind` | query | [Kind](#schema-kind) |  |
+| `limit` | query | integer |  |
+| `cursor` | query | string | The `next_cursor` of the previous page. |
+
+| status | meaning | body |
+|---|---|---|
+| 200 | A page of matches. | `application/json` [SearchPage](#schema-searchpage) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+
+<a id="get-api-v1-openapi-yaml"></a>
+### `GET /api/v1/openapi.yaml`
+
+**This document**
+
+No authentication.
+
+| status | meaning | body |
+|---|---|---|
+| 200 | The OpenAPI document. | `application/yaml` string |
+
+<a id="get-api-v1-whoami"></a>
+### `GET /api/v1/whoami`
+
+**Describe the calling token**
+
+Any valid token may call this; clients use it to verify a login.
+
+| status | meaning | body |
+|---|---|---|
+| 200 | The token's name, scopes and quota. | `application/json` [Whoami](#schema-whoami) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+
+<a id="get-healthz"></a>
+### `GET /healthz`
+
+**Liveness probe**
+
+No authentication.
+
+| status | meaning | body |
+|---|---|---|
+| 200 | The server and its database are up. | `text/plain` string |
+| 503 | The database is unavailable. | `text/plain` string |
+
+## Schemas
+
+<a id="schema-error"></a>
+### Error
+
+| field | type | required | description |
+|---|---|---|---|
+| `error` | object | yes |  |
+
+<a id="schema-item"></a>
+### Item
+
+| field | type | required | description |
+|---|---|---|---|
+| `burn_after_read` | boolean | yes |  |
+| `created_at` | integer | yes | Unix seconds. |
+| `download_url` | string (uri) | yes |  |
+| `expires_at` | integer or null | yes | Unix seconds; null for never. |
+| `id` | string | yes |  |
+| `kind` | [Kind](#schema-kind) | yes |  |
+| `markdown` | string | yes | `![](raw_url)` for images, `[name](url)` otherwise. |
+| `mime` | string | yes | Type of the stored bytes. |
+| `raw_url` | string (uri) | yes | Raw bytes, `/{id}.{ext}`: the URL to embed. |
+| `size` | integer | yes | Stored bytes (after metadata removal or conversion). |
+| `url` | string (uri) | yes | View page. |
+| `view_count` | integer | yes |  |
+| `visibility` | string | yes | One of: `unlisted`, `private`. |
+| `charset` | string |  | Text: original charset when converted to UTF-8, e.g. `GBK`. |
+| `duration_ms` | integer |  | Video and audio length |
+| `filename` | string |  |  |
+| `height` | integer |  | Images: display height. |
+| `lang` | string |  | Text: language, e.g. `go`, `python`, `markdown`, `text`. |
+| `orig_mime` | string |  | Original type when the upload was converted (e.g. `image/heic`). |
+| `slug` | string |  |  |
+| `slug_url` | string (uri) |  |  |
+| `source` | string |  |  |
+| `thumbnail_url` | string (uri) |  | Images: 400px-wide WebP thumbnail. |
+| `title` | string |  |  |
+| `width` | integer |  | Images: display width (EXIF rotation applied). |
+
+<a id="schema-itempage"></a>
+### ItemPage
+
+| field | type | required | description |
+|---|---|---|---|
+| `items` | array of [Item](#schema-item) | yes |  |
+| `next_cursor` | string or null | yes | Pass as `cursor` for the next page; null on the last page. |
+
+<a id="schema-kind"></a>
+### Kind
+
+One of: `image`, `video`, `audio`, `text`, `file`, `encrypted`.
+
+<a id="schema-searchhit"></a>
+### SearchHit
+
+An Item plus `snippet`, the line of text containing the first query word.
+
+| field | type | required | description |
+|---|---|---|---|
+| `burn_after_read` | boolean | yes |  |
+| `created_at` | integer | yes | Unix seconds. |
+| `download_url` | string (uri) | yes |  |
+| `expires_at` | integer or null | yes | Unix seconds; null for never. |
+| `id` | string | yes |  |
+| `kind` | [Kind](#schema-kind) | yes |  |
+| `markdown` | string | yes | `![](raw_url)` for images, `[name](url)` otherwise. |
+| `mime` | string | yes | Type of the stored bytes. |
+| `raw_url` | string (uri) | yes | Raw bytes, `/{id}.{ext}`: the URL to embed. |
+| `size` | integer | yes | Stored bytes (after metadata removal or conversion). |
+| `url` | string (uri) | yes | View page. |
+| `view_count` | integer | yes |  |
+| `visibility` | string | yes | One of: `unlisted`, `private`. |
+| `charset` | string |  | Text: original charset when converted to UTF-8, e.g. `GBK`. |
+| `duration_ms` | integer |  | Video and audio length |
+| `filename` | string |  |  |
+| `height` | integer |  | Images: display height. |
+| `lang` | string |  | Text: language, e.g. `go`, `python`, `markdown`, `text`. |
+| `orig_mime` | string |  | Original type when the upload was converted (e.g. `image/heic`). |
+| `slug` | string |  |  |
+| `slug_url` | string (uri) |  |  |
+| `snippet` | string |  |  |
+| `source` | string |  |  |
+| `thumbnail_url` | string (uri) |  | Images: 400px-wide WebP thumbnail. |
+| `title` | string |  |  |
+| `width` | integer |  | Images: display width (EXIF rotation applied). |
+
+<a id="schema-searchpage"></a>
+### SearchPage
+
+| field | type | required | description |
+|---|---|---|---|
+| `items` | array of [SearchHit](#schema-searchhit) | yes |  |
+| `next_cursor` | string or null | yes |  |
+
+<a id="schema-whoami"></a>
+### Whoami
+
+| field | type | required | description |
+|---|---|---|---|
+| `name` | string | yes |  |
+| `quota_bytes` | integer or null | yes | Upload quota in bytes; null for unlimited. |
+| `scopes` | array of string | yes |  |
+
