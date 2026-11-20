@@ -24,6 +24,10 @@ jobs:
         run: go build ./...
       - name: test
         run: go test -race -count=1 ./...
+      - name: real HEIC conversion must run here, not skip
+        run: |
+          go test -count=1 -v -run TestHEICRealConverter ./internal/server/ | tee heic.log
+          grep -q -- "--- PASS: TestHEICRealConverter" heic.log
   test-s3:
     # The whole suite again, with blobs in an S3-compatible store
     # (versitygw: an S3 gateway over a local directory).
