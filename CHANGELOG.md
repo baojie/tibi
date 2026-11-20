@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.14] — End-to-end encrypted pastes
+
+### Added
+- `kind=encrypted` items: client-side AES-256-GCM, key in the URL fragment
+  (`#k=…`, never sent to the server), optional password
+  (HKDF(key ‖ PBKDF2-SHA256(password, 600 000 iterations))). Versioned
+  format (first byte); header authenticated; file name and type inside the
+  ciphertext. Specified in `api/openapi.yaml`, implemented in
+  `internal/e2e`.
+- The server stores encrypted items as opaque bytes: format checked, no
+  sniffing, metadata stripping, thumbnails, search indexing or link
+  previews; a client-sent file name is dropped. Burn-after-read works (the
+  ciphertext is embedded in the reveal page).
+- Browser decryption with WebCrypto (`/static/e2e.js`): text highlighted
+  client-side with bundled highlight.js 11.11.1 (BSD-3-Clause), images and
+  media shown, every type downloadable decrypted; password prompt; clear
+  messages for a missing key, a wrong key, a wrong password or an unknown
+  format (translated).
+- CLI: `--encrypt` and `--password` for `paste`, `up` and `clip`; MCP
+  `paste_text(encrypt=true)`.
+- Browser end-to-end test: CLI-encrypted text, password-protected text and
+  an image decrypt in Chrome; missing/wrong key and wrong password errors.
+
+### Fixed
+- Elements with the `hidden` attribute could still show when a stylesheet
+  set their `display` (the owner navigation appeared without a token).
+
 ## [0.0.13] — Resumable uploads
 
 ### Added

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.13
+  version: 0.0.14
   description: |
     tibi (题壁) is a self-hosted image host and pastebin: upload an image, a
     text or code snippet, or any file, and get back a URL to share.
@@ -34,6 +34,17 @@ info:
     **Collections** group items in order: an album (all images: shown as a
     thumbnail grid) or a multi-file paste (shown stacked). Item and
     collection IDs share one namespace.
+
+    **Encryption.** Items of kind `encrypted` are encrypted by the client;
+    the server never sees the key, which travels in the link's fragment
+    (`/{id}#k=<base64url key>`; browsers do not send fragments). Format v1:
+    byte 0 = 1 (version), byte 1 = flags (bit 0: password), then for a
+    password a 16-byte PBKDF2 salt and 4-byte big-endian iteration count,
+    a 12-byte nonce, and AES-256-GCM ciphertext with all preceding bytes as
+    additional data. AES key = HKDF-SHA256(K, info "tibi-e2e-v1"), or
+    HKDF-SHA256(K ‖ PBKDF2-SHA256(password)) with a password. The plaintext
+    is a 4-byte big-endian length, a JSON header (`name`, `type`, `lang`),
+    and the content. The view page decrypts in the browser.
 
     **Content is immutable.** To "edit" an item, fork it: the new item has
     `forked_from` set and the original stays as it was.
@@ -161,8 +172,13 @@ paths:
         - { name: title, in: query, schema: { type: string } }
         - name: kind
           in: query
-          description: Force `text` or `file`; media kinds cannot be forced.
-          schema: { type: string, enum: [text, file] }
+          description: |
+            Force `text` or `file` (media kinds cannot be forced), or
+            `encrypted` for end-to-end encrypted content: the body must be
+            in the tibi encrypted format (see `docs/API.md` → Encryption);
+            it is stored as opaque bytes, never indexed or previewed, and
+            any `filename` is dropped. `lang` is kept as a display hint.
+          schema: { type: string, enum: [text, file, encrypted] }
         - name: lang
           in: query
           description: Highlighting language (name, alias or extension, e.g. `python`, `py`); inferred when omitted; unknown names are rejected.
@@ -206,7 +222,7 @@ paths:
               properties:
                 file: { type: array, items: { type: string, format: binary } }
                 title: { type: string }
-                kind: { type: string, enum: [text, file] }
+                kind: { type: string, enum: [text, file, encrypted] }
                 lang: { type: string }
                 keep_meta: { type: string }
                 expires: { type: string }

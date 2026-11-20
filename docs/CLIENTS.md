@@ -22,6 +22,18 @@ tibi up --album *.jpg          # one collection
 tibi ls · tibi search WORDS · tibi rm ID · tibi share ID --ttl 1d
 ```
 
+`--encrypt` encrypts on your machine before uploading (`paste`, `up`,
+`clip`): the server stores only ciphertext, and the printed link carries
+the key after `#k=` — anyone with the whole link can read it, nobody
+without it (including the server) can. Add `--password` to also require a
+password (asked twice; `TIBI_E2E_PASSWORD` for scripts). The page decrypts
+in the browser; the file name stays inside the encryption.
+
+```sh
+cat .env | tibi paste --encrypt -e 1d     # → https://tibi.example.com/aZ3k9QxP#k=…
+tibi up --encrypt --password contract.pdf
+```
+
 Files over 20 MiB go up in resumable chunks with a progress line. If the
 upload is interrupted (network, Ctrl-C, laptop lid), run the same command
 again: it continues where it stopped instead of starting over.
@@ -105,7 +117,7 @@ tools:
 | tool | does |
 |---|---|
 | `upload_file(path, title?, expires?, private?)` | upload a local file, return its URL (and Markdown for images) |
-| `paste_text(text, lang?, title?, expires?, private?)` | publish text or code as a highlighted paste |
+| `paste_text(text, lang?, title?, expires?, private?, encrypt?)` | publish text or code as a highlighted paste; `encrypt` makes it end-to-end encrypted |
 | `list_items(limit?, kind?)` | recent uploads |
 | `search_items(query)` | full-text search |
 | `delete_item(id)` | delete by ID or URL |

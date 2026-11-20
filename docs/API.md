@@ -1,4 +1,4 @@
-# tibi API 0.0.13
+# tibi API 0.0.14
 
 <!-- Generated from api/openapi.yaml by `go run ./tools/apidoc`. Do not edit. -->
 
@@ -33,6 +33,17 @@ link, `/c/{id}` collection. Raw routes support `Range`.
 **Collections** group items in order: an album (all images: shown as a
 thumbnail grid) or a multi-file paste (shown stacked). Item and
 collection IDs share one namespace.
+
+**Encryption.** Items of kind `encrypted` are encrypted by the client;
+the server never sees the key, which travels in the link's fragment
+(`/{id}#k=<base64url key>`; browsers do not send fragments). Format v1:
+byte 0 = 1 (version), byte 1 = flags (bit 0: password), then for a
+password a 16-byte PBKDF2 salt and 4-byte big-endian iteration count,
+a 12-byte nonce, and AES-256-GCM ciphertext with all preceding bytes as
+additional data. AES key = HKDF-SHA256(K, info "tibi-e2e-v1"), or
+HKDF-SHA256(K ‖ PBKDF2-SHA256(password)) with a password. The plaintext
+is a 4-byte big-endian length, a JSON header (`name`, `type`, `lang`),
+and the content. The view page decrypts in the browser.
 
 **Content is immutable.** To "edit" an item, fork it: the new item has
 `forked_from` set and the original stays as it was.
@@ -120,7 +131,7 @@ kept. Identical content is stored once.
 |---|---|---|---|
 | `filename` | query | string | Original file name (multipart parts carry their own). |
 | `title` | query | string |  |
-| `kind` | query | string | Force `text` or `file`; media kinds cannot be forced. |
+| `kind` | query | string | Force `text` or `file` (media kinds cannot be forced), or `encrypted` for end-to-end encrypted content: the body must be in the tibi encrypted format (see `docs/API.md` → Encryption); it is stored as opaque bytes, never indexed or previewed, and any `filename` is dropped. `lang` is kept as a display hint. |
 | `lang` | query | string | Highlighting language (name, alias or extension, e.g. `python`, `py`); inferred when omitted; unknown names are rejected. |
 | `keep_meta` | query | string | Keep image metadata (EXIF, GPS, XMP). |
 | `expires` | query | string | Lifetime, e.g. `10m`, `1h`, `7d`, `30d`, or `never`. Default is the server's `default_expires`. |
