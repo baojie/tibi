@@ -24,6 +24,8 @@ jobs:
         run: go build ./...
       - name: test
         run: go test -race -count=1 ./...
+      - name: browser end-to-end (paste an image into the upload page)
+        run: scripts/e2e/run.sh
       - name: real HEIC conversion must run here, not skip
         run: |
           go test -count=1 -v -run TestHEICRealConverter ./internal/server/ | tee heic.log
