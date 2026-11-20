@@ -1,4 +1,4 @@
-# tibi API 0.0.14
+# tibi API 0.0.15
 
 <!-- Generated from api/openapi.yaml by `go run ./tools/apidoc`. Do not edit. -->
 
@@ -33,6 +33,11 @@ link, `/c/{id}` collection. Raw routes support `Range`.
 **Collections** group items in order: an album (all images: shown as a
 thumbnail grid) or a multi-file paste (shown stacked). Item and
 collection IDs share one namespace.
+
+**CORS.** Browser clients on other origins (such as the Chrome
+extension) can call the API when the server lists their origin in
+`cors_origins`; preflights are answered, and the tus headers
+(`Location`, `Upload-Offset`, …) are exposed.
 
 **Encryption.** Items of kind `encrypted` are encrypted by the client;
 the server never sees the key, which travels in the link's fragment

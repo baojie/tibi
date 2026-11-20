@@ -47,7 +47,9 @@ moved, not copied) and are removed after 24 hours if never finished.
 
 The server reads `/etc/tibi/server.toml` (or `--config PATH`, or
 `TIBI_CONFIG`). Every scalar setting can be overridden with a `TIBI_*`
-environment variable (e.g. `TIBI_BASE_URL`, `TIBI_DATA_DIR`).
+environment variable (e.g. `TIBI_BASE_URL`, `TIBI_DATA_DIR`); the lists
+`cors_origins` and `allowed_referers` take comma- or space-separated
+`TIBI_CORS_ORIGINS` / `TIBI_ALLOWED_REFERERS`.
 
 ```toml
 listen = "127.0.0.1:8070"
@@ -63,6 +65,21 @@ backend = "fs"                      # fs | s3
 
 The metadata database is always local (`data_dir/tibi.db`), even when blobs
 live in object storage.
+
+### Browser clients on other origins (`cors_origins`)
+
+Browser code running on another origin — the [Chrome extension](CLIENTS.md#chrome-extension),
+a web app of yours — may only call `/api/` if its origin is listed:
+
+```toml
+cors_origins = ["chrome-extension://<extension id>", "https://app.example.com"]
+```
+
+The extension's options page shows its exact origin when the server
+refuses it. `"*"` allows any origin; that does not expose anything by
+itself, since the API authenticates with bearer tokens, not cookies — but
+listing origins keeps tokens pasted into random web pages useless. Public
+pages and raw URLs need no CORS.
 
 ## Web pages and the signing key
 

@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.15] — Chrome extension
+
+### Added
+- `extensions/chrome/` (Manifest V3): right-click image → upload,
+  selection → text paste (line breaks kept, page title), page → visible
+  screenshot; link copied to the clipboard and shown in a notification;
+  popup with recent items; options page with a connection test that names
+  the origin to add to `cors_origins`. `source=chrome`, `meta.page_url`;
+  tus above 20 MiB. English and Chinese.
+- The extension's API client uses types and endpoints generated from
+  `api/openapi.yaml` (`go run ./tools/apidoc -js`; checked in CI).
+- CORS for `/api/` driven by `cors_origins` (and `TIBI_CORS_ORIGINS`):
+  preflights, tus headers exposed; nothing for unlisted origins.
+- `TIBI_ALLOWED_REFERERS` environment variable.
+- Browser test: the unpacked extension in Chrome against a server that
+  allows only its origin — image, selection, screenshot (clipboard read
+  back), a 21 MiB tus upload, popup and options.
+
 ## [0.0.14] — End-to-end encrypted pastes
 
 ### Added

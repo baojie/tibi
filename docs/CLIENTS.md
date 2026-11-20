@@ -68,6 +68,30 @@ Open `https://tibi.example.com/upload`, paste a token once, then drag files,
 pick them, or press Ctrl+V to paste a screenshot or text. `/recent` lists,
 searches and bulk-deletes your items.
 
+## Chrome extension
+
+`extensions/chrome/` (Manifest V3, Chrome/Edge ≥ 116):
+
+- right-click an image → **Upload image to tibi**;
+- select text → **Paste selection to tibi** (line breaks kept, titled with
+  the page);
+- right-click a page → **Upload screenshot of this page to tibi** (the
+  visible area);
+- the toolbar popup lists recent items with Copy buttons.
+
+The link is copied and shown in a notification. Uploads carry
+`source=chrome` and `meta.page_url`; files over 20 MiB use tus.
+
+Install: `chrome://extensions` → Developer mode → **Load unpacked** →
+choose `extensions/chrome`. In the options page enter the server URL and a
+token (`tibi admin token create --name chrome --scopes upload`), then add
+the extension's origin, shown there, to the server's
+[`cors_origins`](DEPLOY.md#browser-clients-on-other-origins-cors_origins)
+and restart tibi.
+
+Images on other sites usually need access to that site: the extension asks
+the first time, or allow all sites once in its options.
+
 ## ShareX (Windows)
 
 1. Edit `integrations/sharex/tibi.sxcu`: set `RequestURL` to your server and
