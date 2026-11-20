@@ -9,6 +9,7 @@ import (
 
 	"tibi/internal/blob"
 	"tibi/internal/ingest"
+	"tibi/internal/metrics"
 	"tibi/internal/store"
 )
 
@@ -29,6 +30,10 @@ func Run(ctx context.Context, st *store.Store, bs blob.Store) (Result, error) {
 		return Result{}, err
 	}
 	res := Result{Items: pr.Items}
+	defer func() {
+		metrics.GCItems.Add(int64(res.Items))
+		metrics.GCBlobs.Add(int64(res.Blobs))
+	}()
 	for _, sha := range pr.Hashes {
 		deleted, err := deleteIfUnreferenced(ctx, st, bs, sha)
 		if err != nil {
