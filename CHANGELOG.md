@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.16] — Android app
+
+### Added
+- `android/`: share target for images, videos, text and any file
+  (`ACTION_SEND`, `ACTION_SEND_MULTIPLE`); shared content is copied into
+  the app's outbox and uploaded by WorkManager over tus, with progress saved
+  after every step: a lost network (airplane mode) pauses the upload and it
+  resumes from the server's offset. Link copied; notification with Copy and
+  Share; several items → one collection; Quick Settings tile for the newest
+  screenshot; settings screen with a connection test. English and Chinese.
+  `source=android`.
+- `android/scripts/emulator-test.sh` and a CI job running it on an
+  emulator: one photo (link read back from the clipboard), five photos →
+  one collection in order, airplane mode mid-upload (resumes; nothing sent
+  twice), HEIC served as JPEG, the Quick Settings tile.
+
 ## [0.0.15] — Chrome extension
 
 ### Added

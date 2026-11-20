@@ -92,6 +92,32 @@ and restart tibi.
 Images on other sites usually need access to that site: the extension asks
 the first time, or allow all sites once in its options.
 
+## Android
+
+`android/` (Android 8+): share photos, videos, files or text from any app
+to **Upload to tibi**. The upload runs in the background (WorkManager +
+tus): it waits out a lost network or airplane mode and continues where it
+stopped. When it is done, the link is copied and a notification offers
+**Copy** and **Share**. Several items shared at once become one
+collection. A Quick Settings tile, **Upload screenshot**, sends the newest
+screenshot. HEIC photos are converted by the server. Uploads carry
+`source=android`.
+
+Build and install (JDK 17+ and the Android SDK; or take the APK artifact
+of a CI run):
+
+```sh
+cd android && ./gradlew installDebug
+```
+
+Open the app, enter the server URL and a token
+(`tibi admin token create --name android --scopes upload`), tap **Save and
+test**, and allow notifications. Allow access to screenshots if you want
+the tile. Plain `http://` servers work (for a LAN); use HTTPS otherwise.
+
+`android/scripts/emulator-test.sh` is the acceptance test on an emulator
+(also run in CI).
+
 ## ShareX (Windows)
 
 1. Edit `integrations/sharex/tibi.sxcu`: set `RequestURL` to your server and
