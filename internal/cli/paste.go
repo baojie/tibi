@@ -40,15 +40,32 @@ func (a *App) paste(ctx context.Context, args []string) error {
 	if len(bytes.TrimSpace(text)) == 0 {
 		return errors.New("empty paste; nothing uploaded")
 	}
-	opts := a.uploadOptions(o)
-	opts.Kind = "text"
-	it, raw, err := cl.Upload(ctx, bytes.NewReader(text), int64(len(text)), opts)
-	if err != nil {
-		return err
-	}
-	line, err := a.result(it, raw, o)
-	if err != nil {
-		return err
+	var line string
+	if o.encrypt {
+		name := o.name
+		if name == "" {
+			name = "paste.txt"
+		}
+		_, link, raw, err := a.uploadEncrypted(ctx, cl, text, name, "text/plain; charset=utf-8", o)
+		if err != nil {
+			return err
+		}
+		if line, err = a.encryptedLine(link, raw, o); err != nil {
+			return err
+		}
+	} else {
+		if o.password {
+			return usageError{"--password needs --encrypt"}
+		}
+		opts := a.uploadOptions(o)
+		opts.Kind = "text"
+		it, raw, err := cl.Upload(ctx, bytes.NewReader(text), int64(len(text)), opts)
+		if err != nil {
+			return err
+		}
+		if line, err = a.result(it, raw, o); err != nil {
+			return err
+		}
 	}
 	fmt.Fprintln(a.Stdout, line)
 	a.copyResult(cfg, o, []string{line})

@@ -91,6 +91,8 @@ upload flags:
   -p, --private      only visible with a read_private token
       --slug NAME    custom short link /s/NAME
       --burn         burn after reading: deleted after the first view
+      --encrypt      end-to-end encrypt; the key is only in the printed link (#k=…)
+      --password     with --encrypt: also require a password
       --json         print the full API response
 `
 
@@ -267,6 +269,7 @@ type outFlags struct {
 	expire, slug         string
 	private, burn        bool
 	album                bool
+	encrypt, password    bool
 	md, raw, json, nocpy bool
 	keepMeta             bool
 }
@@ -286,6 +289,8 @@ func (a *App) uploadFlags(name string) (*pflag.FlagSet, *outFlags) {
 	fs.BoolVarP(&o.private, "private", "p", false, "private: visible only with a read_private token")
 	fs.StringVar(&o.slug, "slug", "", "custom short link /s/NAME")
 	fs.BoolVar(&o.burn, "burn", false, "burn after reading: deleted after the first view")
+	fs.BoolVar(&o.encrypt, "encrypt", false, "end-to-end encrypt: the key stays in the printed link (#k=…)")
+	fs.BoolVar(&o.password, "password", false, "with --encrypt: also require a password (asked twice)")
 	return fs, o
 }
 
@@ -307,11 +312,40 @@ func (a *App) up(ctx context.Context, args []string) error {
 		return err
 	}
 	if o.album {
+		if o.encrypt {
+			return usageError{"--encrypt cannot be combined with --album"}
+		}
 		return a.album(ctx, cl, cfg, files, o)
+	}
+	if o.password && !o.encrypt {
+		return usageError{"--password needs --encrypt"}
 	}
 	var out []string
 	var failed int
 	for _, f := range files {
+		if o.encrypt {
+			content, name, typ, err := a.encryptFile(f, o.name)
+			var line string
+			if err == nil {
+				var raw json.RawMessage
+				var link string
+				if _, link, raw, err = a.uploadEncrypted(ctx, cl, content, name, typ, o); err == nil {
+					line, err = a.encryptedLine(link, raw, o)
+				}
+			}
+			var ue usageError
+			if errors.As(err, &ue) {
+				return err
+			}
+			if err != nil {
+				a.errf("%s: %v", displayName(f), err)
+				failed++
+				continue
+			}
+			fmt.Fprintln(a.Stdout, line)
+			out = append(out, line)
+			continue
+		}
 		it, raw, err := a.upload(ctx, cl, f, o)
 		if err != nil {
 			a.errf("%s: %v", displayName(f), err)
@@ -400,13 +434,23 @@ func (a *App) clip(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	it, raw, err := cl.Upload(ctx, bytes.NewReader(data), int64(len(data)), a.uploadOptions(o))
-	if err != nil {
-		return err
-	}
-	line, err := a.result(it, raw, o)
-	if err != nil {
-		return err
+	var line string
+	if o.encrypt {
+		_, link, raw, err := a.uploadEncrypted(ctx, cl, data, o.name, typeOf(o.name, data[:min(len(data), 512)]), o)
+		if err != nil {
+			return err
+		}
+		if line, err = a.encryptedLine(link, raw, o); err != nil {
+			return err
+		}
+	} else {
+		it, raw, err := cl.Upload(ctx, bytes.NewReader(data), int64(len(data)), a.uploadOptions(o))
+		if err != nil {
+			return err
+		}
+		if line, err = a.result(it, raw, o); err != nil {
+			return err
+		}
 	}
 	fmt.Fprintln(a.Stdout, line)
 	a.copyResult(cfg, o, []string{line})

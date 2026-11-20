@@ -36,8 +36,16 @@ func main() {
 		StdinIsTTY:  term.IsTerminal(int(os.Stdin.Fd())),
 		StdoutIsTTY: term.IsTerminal(int(os.Stdout.Fd())),
 		StderrIsTTY: term.IsTerminal(int(os.Stderr.Fd())),
+		// Secrets are read from the terminal even when stdin is a pipe
+		// (e.g. `cat secret.txt | tibi paste --encrypt --password`).
 		ReadSecret: func() (string, error) {
-			b, err := term.ReadPassword(int(os.Stdin.Fd()))
+			tty, err := os.Open("/dev/tty")
+			if err != nil {
+				b, err := term.ReadPassword(int(os.Stdin.Fd()))
+				return string(b), err
+			}
+			defer tty.Close()
+			b, err := term.ReadPassword(int(tty.Fd()))
 			return string(b), err
 		},
 	}

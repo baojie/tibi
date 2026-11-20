@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tibi/internal/cli"
+	"tibi/internal/e2e"
 )
 
 func TestManageCommands(t *testing.T) {
@@ -218,4 +219,68 @@ func TestUpUsesResumableAndResumes(t *testing.T) {
 	if got := fetch(t, strings.TrimSpace(out)+"/dl"); !bytes.Equal(got, data) {
 		t.Fatal("resumed upload differs")
 	}
+}
+
+func TestEncryptCommands(t *testing.T) {
+	e, env := loggedIn(t)
+	decrypt := func(link, password string) (e2e.Header, string) {
+		t.Helper()
+		page, frag, ok := strings.Cut(link, "#k=")
+		if !ok {
+			t.Fatalf("no key in %q", link)
+		}
+		key, err := e2e.ParseKey(frag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h, plain, err := e2e.Decrypt(fetch(t, page+"/raw"), key, password)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h, string(plain)
+	}
+	r := exec(t, env, strings.NewReader("my secret notes\n"), false, "paste", "--encrypt", "-l", "go")
+	link := strings.TrimSpace(r.stdout)
+	if r.code != 0 || !strings.Contains(link, "#k=") {
+		t.Fatalf("paste --encrypt: %+v", r)
+	}
+	if h, plain := decrypt(link, ""); plain != "my secret notes\n" || h.Lang != "go" || h.Name != "paste.txt" {
+		t.Fatalf("decrypted %q %+v", plain, h)
+	}
+	if strings.Contains(string(fetch(t, strings.Split(link, "#")[0]+"/raw")), "secret") {
+		t.Fatal("server has plaintext")
+	}
+	// up --encrypt keeps the name and type inside the ciphertext.
+	f := filepath.Join(t.TempDir(), "report.pdf")
+	writeFile(t, f, []byte("%PDF-1.4 confidential"))
+	r = exec(t, env, nil, true, "up", "--encrypt", "--no-copy", f)
+	if h, plain := decrypt(strings.TrimSpace(r.stdout), ""); plain != "%PDF-1.4 confidential" || h.Name != "report.pdf" || h.Type != "application/pdf" {
+		t.Fatalf("up --encrypt: %+v %q", h, plain)
+	}
+	// --password (from the environment, as scripts do).
+	env["TIBI_E2E_PASSWORD"] = "open sesame"
+	r = exec(t, env, strings.NewReader("pw protected"), false, "paste", "--encrypt", "--password")
+	if _, plain := decrypt(strings.TrimSpace(r.stdout), "open sesame"); plain != "pw protected" {
+		t.Fatal("password paste")
+	}
+	delete(env, "TIBI_E2E_PASSWORD")
+	// Interactive password: asked twice, must match.
+	var out, errb bytes.Buffer
+	answers := []string{"a", "b"}
+	a := &cli.App{Stdin: strings.NewReader("x"), Stdout: &out, Stderr: &errb, Getenv: func(k string) string { return env[k] },
+		ReadSecret: func() (string, error) { s := answers[0]; answers = answers[1:]; return s, nil }}
+	if code := a.Run(context.Background(), []string{"paste", "--encrypt", "--password"}); code == 0 || !strings.Contains(errb.String(), "do not match") {
+		t.Fatalf("mismatched passwords: %d %s", code, errb.String())
+	}
+	// --json reports the link with its key; incompatible flags are refused.
+	r = exec(t, env, strings.NewReader("j"), false, "paste", "--encrypt", "--json")
+	if !strings.Contains(r.stdout, `#k=`) || !strings.Contains(r.stdout, `"kind":"encrypted"`) {
+		t.Fatalf("--json: %q", r.stdout)
+	}
+	for _, args := range [][]string{{"up", "--encrypt", "--md", f}, {"up", "--encrypt", "--album", f, f}, {"up", "--password", f}} {
+		if r := exec(t, env, nil, true, args...); r.code != 2 {
+			t.Errorf("%v: %+v", args, r)
+		}
+	}
+	_ = e
 }
