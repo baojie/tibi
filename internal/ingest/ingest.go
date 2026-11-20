@@ -100,27 +100,20 @@ func (p *Pipeline) Ingest(ctx context.Context, r io.Reader, o Options) (*store.I
 
 // Prepare runs steps 1–4: spool, sniff, classify, strip metadata.
 func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepared, error) {
-	switch o.Kind {
-	case "", store.KindText, store.KindFile:
-	default:
-		return nil, &BadRequestError{fmt.Sprintf("kind %q cannot be forced (allowed: text, file)", o.Kind)}
+	if err := checkKind(o.Kind); err != nil {
+		return nil, err
 	}
 	tmp, err := os.CreateTemp(p.TempDir, "upload-*")
 	if err != nil {
 		return nil, err
 	}
 	pr := &Prepared{file: tmp}
-	ok := false
-	defer func() {
-		if !ok {
-			pr.Close()
-		}
-	}()
 
 	// 1. Spool, enforcing the limit as bytes arrive.
 	limit := o.MaxBytes
 	n, err := io.Copy(tmp, io.LimitReader(r, limit+1))
 	if err != nil {
+		pr.Close()
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
 			return nil, ErrTooLarge
@@ -128,11 +121,63 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 		return nil, err
 	}
 	if n > limit {
+		pr.Close()
 		return nil, ErrTooLarge
 	}
+	return p.prepareSpooled(ctx, pr, n, o)
+}
+
+// PrepareFile is Prepare for content already on disk (a finished resumable
+// upload): the file is moved into the pipeline instead of being copied. It
+// must be on the same filesystem as TempDir.
+func (p *Pipeline) PrepareFile(ctx context.Context, path string, o Options) (*Prepared, error) {
+	if err := checkKind(o.Kind); err != nil {
+		return nil, err
+	}
+	dst, err := os.CreateTemp(p.TempDir, "upload-*")
+	if err != nil {
+		return nil, err
+	}
+	dst.Close()
+	if err := os.Rename(path, dst.Name()); err != nil {
+		os.Remove(dst.Name())
+		return nil, err
+	}
+	f, err := os.OpenFile(dst.Name(), os.O_RDWR, 0)
+	if err != nil {
+		os.Remove(dst.Name())
+		return nil, err
+	}
+	pr := &Prepared{file: f}
+	st, err := f.Stat()
+	if err != nil {
+		pr.Close()
+		return nil, err
+	}
+	return p.prepareSpooled(ctx, pr, st.Size(), o)
+}
+
+func checkKind(k string) error {
+	switch k {
+	case "", store.KindText, store.KindFile:
+		return nil
+	}
+	return &BadRequestError{fmt.Sprintf("kind %q cannot be forced (allowed: text, file)", k)}
+}
+
+// prepareSpooled runs steps 2–4 on n bytes spooled in pr.file.
+func (p *Pipeline) prepareSpooled(ctx context.Context, pr *Prepared, n int64, o Options) (*Prepared, error) {
+	ok := false
+	defer func() {
+		if !ok {
+			pr.Close()
+		}
+	}()
 	if n == 0 {
 		return nil, ErrEmpty
 	}
+	tmp := pr.file
+	limit := max(o.MaxBytes, n)
 
 	// 2–3. Sniff and classify.
 	head := make([]byte, 512)
