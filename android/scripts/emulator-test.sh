@@ -76,13 +76,22 @@ done_url() { # n timeout-seconds
   fail "upload $1 did not finish in $2 s"
 }
 # The clipboard, read the way a user would: paste into the app's server field.
+# Taps the view with this resource id (waits for it to appear).
+tap_id() {
+  local b=
+  for _ in $(seq 10); do
+    b=$(ui | grep "tibi.android:id/$1\"" | grep -oE 'bounds="[^"]*"' | grep -oE '[0-9]+' | tr '\n' ' ')
+    [ -n "$b" ] && break
+    sleep 1
+  done
+  [ -n "$b" ] || fail "no view $1 on screen"
+  set -- $b
+  $ADB shell input tap $((($1 + $3) / 2)) $((($2 + $4) / 2))
+}
 clipboard() {
   $ADB shell am start -W -n $PKG/.SettingsActivity >/dev/null
   sleep 1
-  local b
-  b=$(ui | grep 'tibi.android:id/server' | grep -oE 'bounds="[^"]*"' | grep -oE '[0-9]+' | tr '\n' ' ')
-  set -- $b
-  $ADB shell input tap $((($1 + $3) / 2)) $((($2 + $4) / 2))
+  tap_id server
   $ADB shell input keycombination 113 29 # Ctrl+A
   $ADB shell input keycombination 113 50 # Ctrl+V
   sleep 0.5
@@ -114,6 +123,7 @@ notified "$u1" || fail "no notification with $u1"
 for _ in $(seq 10); do shown=$(ui | grep 'tibi.android:id/url' | grep -oE ' text="[^"]*"' | cut -d'"' -f2); [ "$shown" = "$u1" ] && break; sleep 1; done
 [ "$shown" = "$u1" ] || fail "share dialog shows '$shown', want $u1"
 ui | grep 'tibi.android:id/share"' >/dev/null || fail "no Share button in the dialog"
+tap_id close   # "Done", as a user would
 clip=$(clipboard)
 [ "$clip" = "$u1" ] || fail "clipboard: '$clip', want $u1"
 # ...and the app's main screen lists it under recent links.
