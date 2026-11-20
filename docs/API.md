@@ -11,8 +11,18 @@ against it.
 
 **Authentication.** Send `Authorization: Bearer tibi_…`. Tokens carry
 scopes: `upload` (upload, list, search, view metadata, change metadata),
-`delete`, `read_private` (see private items on public URLs) and `admin`
-(all of them).
+`delete`, `read_private` (see private items) and `admin` (all of them).
+
+**Private items** are visible — on public URLs and through this API
+alike — only to tokens with `read_private` and to the token that
+uploaded them; to any other token they do not exist (404, absent from
+lists and search, hidden inside collections). So a token kept on a
+phone or in a browser extension with just `upload` cannot read the
+owner's private items if it leaks.
+
+**Rate limit.** Each token may make `rate_limit` requests per minute
+(default 1200), in bursts of up to `rate_burst` (default 200); beyond
+that the API answers `429` with `Retry-After`.
 
 **Errors** use one envelope: `{"error": {"code": "…", "message": "…"}}`.
 
@@ -101,6 +111,7 @@ Live items (not deleted or expired), including private ones. Requires scope `upl
 | 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="post-api-v1-items"></a>
 ### `POST /api/v1/items`
@@ -113,6 +124,7 @@ Requires scope `upload`. Two request forms:
   form fields with the same names as the query parameters below.
   Fields may come before or after the files. Each part's filename is
   used. One file returns an Item; several return an array, in order.
+  At most 100 `file` parts and 50 other fields per request.
 - **raw body** — the body is the content. Options are query
   parameters, or headers named `X-Tibi-` plus the parameter name in
   title case with dashes (`X-Tibi-Filename`, `X-Tibi-Keep-Meta`,
@@ -157,6 +169,7 @@ Request body: `application/octet-stream` (string (binary)), `multipart/form-data
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 413 | The upload exceeds `max_upload_bytes`, or the token's upload quota (`message` gives the numbers). | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-items-id"></a>
 ### `GET /api/v1/items/{id}`
@@ -175,6 +188,7 @@ Any visibility. Requires scope `upload`.
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="patch-api-v1-items-id"></a>
 ### `PATCH /api/v1/items/{id}`
@@ -184,7 +198,9 @@ Any visibility. Requires scope `upload`.
 Content is immutable. Only these fields can be set: `title`, `lang`
 (text items), `visibility`, `expires` (relative to now, or `never`)
 and `slug` (an empty string removes it). Any other field is
-rejected. Requires scope `upload`.
+rejected. Requires scope `upload`; making the item expire sooner
+than it would (including giving a never-expiring item an expiry)
+deletes it early, so that also requires scope `delete`.
 
 | parameter | in | type | description |
 |---|---|---|---|
@@ -199,6 +215,7 @@ Request body: `application/json` (object)
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="delete-api-v1-items-id"></a>
 ### `DELETE /api/v1/items/{id}`
@@ -217,6 +234,7 @@ The item returns 404 at once and is purged after a day. Requires scope `delete`.
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="post-api-v1-items-id-fork"></a>
 ### `POST /api/v1/items/{id}/fork`
@@ -248,6 +266,7 @@ Request body: `application/octet-stream` (string (binary))
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
 | 413 | The upload exceeds `max_upload_bytes`, or the token's upload quota (`message` gives the numbers). | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="post-api-v1-items-id-share-link"></a>
 ### `POST /api/v1/items/{id}/share-link`
@@ -272,6 +291,7 @@ never outlives the item. Requires scope `upload`.
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-search"></a>
 ### `GET /api/v1/search`
@@ -299,6 +319,7 @@ scope `upload`.
 | 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-collections"></a>
 ### `GET /api/v1/collections`
@@ -318,6 +339,7 @@ Requires scope `upload`.
 | 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="post-api-v1-collections"></a>
 ### `POST /api/v1/collections`
@@ -334,6 +356,7 @@ Request body: `application/json` (object)
 | 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-collections-id"></a>
 ### `GET /api/v1/collections/{id}`
@@ -352,6 +375,7 @@ Requires scope `upload`.
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="patch-api-v1-collections-id"></a>
 ### `PATCH /api/v1/collections/{id}`
@@ -373,6 +397,7 @@ Request body: `application/json` (object)
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="delete-api-v1-collections-id"></a>
 ### `DELETE /api/v1/collections/{id}`
@@ -391,6 +416,7 @@ The collection and every item in it are deleted (purged after a day). Requires s
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-openapi-yaml"></a>
 ### `GET /api/v1/openapi.yaml`
@@ -415,6 +441,7 @@ Storage, item counts, traffic and the most-served items. Requires scope `admin`.
 | 200 | Statistics. | `application/json` [Stats](#schema-stats) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="post-api-v1-uploads"></a>
 ### `POST /api/v1/uploads/`
@@ -438,6 +465,7 @@ plain text.
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 413 | Larger than max_resumable_bytes or the token's quota (text/plain). | — |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="patch-api-v1-uploads-id"></a>
 ### `PATCH /api/v1/uploads/{id}`
@@ -493,6 +521,7 @@ Requires scope `upload` and the token that created the upload.
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
 | 409 | Not finished yet; `message` says how many bytes arrived. | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-whoami"></a>
 ### `GET /api/v1/whoami`
@@ -505,6 +534,7 @@ Any valid token may call this; clients use it to verify a login.
 |---|---|---|
 | 200 | The token's name, scopes and quota. | `application/json` [Whoami](#schema-whoami) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 429 | The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds. | `application/json` [Error](#schema-error) |
 
 <a id="get-healthz"></a>
 ### `GET /healthz`

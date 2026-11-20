@@ -6,6 +6,57 @@ between minor versions, but the public URL scheme is frozen from 0.0.1.
 
 ## [Unreleased]
 
+### Security
+Fixes from an independent review of the security model (A8) and the
+end-to-end encryption (A9); see `docs/SECURITY.md`.
+- Private items are visible in the API only to tokens with `read_private`
+  and to the token that uploaded them: an `upload`-only token could list,
+  search, read, share, publish and (via `expires`) delete everyone's
+  private items. Applies to items, search, share links, forks and
+  collections.
+- Making an item or collection expire sooner requires scope `delete`.
+- Burn-after-read: the reveal no longer inlines the content (one request
+  cost ~10× the item's size in memory); it hands out a 10-minute link.
+  Encrypted burn items keep their key across the reveal and decrypt (they
+  used to be destroyed unreadable). Cross-site reveals are refused; share
+  links to private burn items work.
+- Daily bandwidth caps count a response's bytes when it starts, so
+  parallel downloads cannot overshoot them; presigned redirect URLs last
+  15 minutes (was 1 hour) and are not cached by shared caches.
+- Quotas count unfinished resumable uploads and are checked atomically
+  with the commit, and again when a resumable upload completes.
+- Per-token API rate limit (`rate_limit`, `rate_burst`; 429 with
+  `Retry-After`), as PLAN A8.7 always specified.
+- Image decompression bombs: thumbnails are limited by decoded bytes (a
+  16-bit 9999×9999 PNG decoded to 800 MB) and made two at a time; HEIC
+  converters get the input format named explicitly, memory limits, and
+  run two at a time.
+- Multipart uploads: at most 100 files and 50 fields per request (20 000
+  parts held 40 000 file descriptors open).
+- Search no longer crashes on pastes with characters whose lower case is
+  longer in UTF-8 (Ⱥ).
+- Hotlink protection covers `/dl` of media.
+- `/metrics` needs an admin token unless `metrics_allow_local` is set (a
+  same-machine reverse proxy made every request look local).
+- S3 objects of active types are stored as `application/octet-stream`;
+  the database file is created 0600; `/static/` lists no directories.
+- Browser decryption: downloads are always `application/octet-stream`,
+  inline display is limited to raster images and media, PBKDF2 iteration
+  counts are bounded, malformed headers give an error instead of a blank
+  page. `internal/e2e` no longer panics on 32-bit platforms for huge
+  header lengths. MCP's `paste_text` says that titles are not encrypted.
+
+### Behaviour changes
+- `/metrics` without a token from localhost now needs
+  `metrics_allow_local = true`.
+- `upload`-only tokens no longer see other tokens' private items.
+- Shortening `expires` needs scope `delete`.
+
+### Added
+- `docs/SECURITY.md` (security model and reporting), `docs/ACCEPTANCE.md`
+  (every acceptance criterion and where it is checked), `LICENSE`
+  (AGPL-3.0-only).
+
 ### Changed
 - Android: sharing opens a small dialog with the upload's progress and then
   the link itself, with Open, Copy and Share — not just a toast and a

@@ -12,8 +12,18 @@ info:
 
     **Authentication.** Send `Authorization: Bearer tibi_…`. Tokens carry
     scopes: `upload` (upload, list, search, view metadata, change metadata),
-    `delete`, `read_private` (see private items on public URLs) and `admin`
-    (all of them).
+    `delete`, `read_private` (see private items) and `admin` (all of them).
+
+    **Private items** are visible — on public URLs and through this API
+    alike — only to tokens with `read_private` and to the token that
+    uploaded them; to any other token they do not exist (404, absent from
+    lists and search, hidden inside collections). So a token kept on a
+    phone or in a browser extension with just `upload` cannot read the
+    owner's private items if it leaks.
+
+    **Rate limit.** Each token may make `rate_limit` requests per minute
+    (default 1200), in bursts of up to `rate_burst` (default 200); beyond
+    that the API answers `429` with `Retry-After`.
 
     **Errors** use one envelope: `{"error": {"code": "…", "message": "…"}}`.
 
@@ -116,6 +126,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Stats" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/openapi.yaml:
     get:
@@ -142,6 +153,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Whoami" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
   /api/v1/items:
     post:
       tags: [items]
@@ -154,6 +166,7 @@ paths:
           form fields with the same names as the query parameters below.
           Fields may come before or after the files. Each part's filename is
           used. One file returns an Item; several return an array, in order.
+          At most 100 `file` parts and 50 other fields per request.
         - **raw body** — the body is the content. Options are query
           parameters, or headers named `X-Tibi-` plus the parameter name in
           title case with dashes (`X-Tibi-Filename`, `X-Tibi-Keep-Meta`,
@@ -250,6 +263,7 @@ paths:
                   - { $ref: "#/components/schemas/CollectionUpload" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "413": { $ref: "#/components/responses/TooLarge" }
     get:
@@ -271,6 +285,7 @@ paths:
               schema: { $ref: "#/components/schemas/ItemPage" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/items/{id}:
     parameters:
@@ -287,6 +302,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Item" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
@@ -297,7 +313,9 @@ paths:
         Content is immutable. Only these fields can be set: `title`, `lang`
         (text items), `visibility`, `expires` (relative to now, or `never`)
         and `slug` (an empty string removes it). Any other field is
-        rejected. Requires scope `upload`.
+        rejected. Requires scope `upload`; making the item expire sooner
+        than it would (including giving a never-expiring item an expiry)
+        deletes it early, so that also requires scope `delete`.
       requestBody:
         required: true
         content:
@@ -319,6 +337,7 @@ paths:
               schema: { $ref: "#/components/schemas/Item" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
@@ -329,6 +348,7 @@ paths:
       responses:
         "204": { description: Deleted. }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/items/{id}/share-link:
@@ -357,6 +377,7 @@ paths:
               schema: { $ref: "#/components/schemas/ShareLink" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/items/{id}/fork:
@@ -391,6 +412,7 @@ paths:
               schema: { $ref: "#/components/schemas/Item" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "413": { $ref: "#/components/responses/TooLarge" }
@@ -419,6 +441,7 @@ paths:
               schema: { $ref: "#/components/schemas/Collection" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
     get:
       tags: [collections]
@@ -436,6 +459,7 @@ paths:
               schema: { $ref: "#/components/schemas/CollectionPage" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/collections/{id}:
     parameters:
@@ -452,6 +476,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Collection" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
@@ -479,6 +504,7 @@ paths:
               schema: { $ref: "#/components/schemas/Collection" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
@@ -489,6 +515,7 @@ paths:
       responses:
         "204": { description: Deleted. }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/uploads/:
@@ -510,6 +537,7 @@ paths:
         "201": { description: Created; see the Location header. }
         "400": { description: Bad Upload-Length or metadata (text/plain). }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "413": { description: Larger than max_resumable_bytes or the token's quota (text/plain). }
   /api/v1/uploads/{id}:
@@ -560,6 +588,7 @@ paths:
               schema: { $ref: "#/components/schemas/Item" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
@@ -593,6 +622,7 @@ paths:
               schema: { $ref: "#/components/schemas/SearchPage" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "403": { $ref: "#/components/responses/Forbidden" }
 components:
   securitySchemes:
@@ -622,6 +652,13 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     Unauthorized:
       description: The token is missing, invalid or revoked.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: The token made too many requests (`rate_limit` per minute, bursts of `rate_burst`); retry after `Retry-After` seconds.
+      headers:
+        Retry-After: { schema: { type: integer } }
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -656,7 +693,7 @@ components:
           properties:
             code:
               type: string
-              enum: [bad_request, empty, unauthorized, forbidden, not_found, too_large, incomplete, internal]
+              enum: [bad_request, empty, unauthorized, forbidden, not_found, too_large, incomplete, rate_limited, internal]
             message: { type: string }
     Whoami:
       type: object

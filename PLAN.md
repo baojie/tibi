@@ -248,7 +248,7 @@ Clients: CLI (built-in), Android (`tus-android-client`), Chrome (`tus-js-client`
 |---|---|---|---|
 | GET | `/api/v1/items?limit&cursor&kind&source&collection` | upload | list, newest first |
 | GET | `/api/v1/items/{id}` | upload | metadata |
-| PATCH | `/api/v1/items/{id}` | upload | `title`, `lang`, `visibility`, `expires`, `slug` (never content) |
+| PATCH | `/api/v1/items/{id}` | upload (+delete to shorten `expires`) | `title`, `lang`, `visibility`, `expires`, `slug` (never content) |
 | DELETE | `/api/v1/items/{id}` | delete | soft delete |
 | POST | `/api/v1/items/{id}/fork` | upload | body = new content; creates new item with `forked_from` |
 | POST | `/api/v1/items/{id}/share-link` | upload | signed time-limited URL for a private item (`?ttl=1h`) |
@@ -257,7 +257,7 @@ Clients: CLI (built-in), Android (`tus-android-client`), Chrome (`tus-js-client`
 | GET | `/api/v1/stats` | admin | storage used, item counts, bytes served, top items |
 | GET | `/api/v1/whoami` | any | token name, scopes, quota |
 | GET | `/api/v1/openapi.yaml` | none | contract |
-| GET | `/healthz`, `/metrics` | none / admin-or-localhost | liveness, Prometheus |
+| GET | `/healthz`, `/metrics` | none / admin (localhost only with `metrics_allow_local`) | liveness, Prometheus |
 
 ### Public routes
 - `/{id}` view page by kind: image (with copy-link/Markdown buttons), video/audio
@@ -269,6 +269,8 @@ Clients: CLI (built-in), Android (`tus-android-client`), Chrome (`tus-js-client`
   paste view.
 - All raw routes support `Range`.
 - `private`: 404 unless token with `read_private` or a valid signed share link.
+  The same holds in the API: a token without `read_private` sees only its
+  own private items (decided at the 0.1.0 security review).
 - Expired / deleted / burned: 404 (don't leak existence).
 - `burn_after_read`: deleted after the first successful **view page** render by
   a non-owner (not on raw prefetch by chat-app link previewers — the view page

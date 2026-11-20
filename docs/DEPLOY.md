@@ -1,7 +1,8 @@
 # Deploying tibi
 
-This guide grows with each release. It currently covers configuration and
-blob storage (local disk or S3-compatible object storage).
+Installing, configuring and running a tibi server: storage on local disk or
+S3-compatible object storage (AWS S3, Backblaze B2, MinIO, …), limits and
+cost control, monitoring, backups and HEIC support.
 
 ## Installing
 
@@ -87,7 +88,11 @@ pages and raw URLs need no CORS.
 token once, and the browser keeps it in local storage (on that origin
 only). Anyone can load these pages, but they show nothing without a valid
 token. Consider serving raw content from a separate origin
-(`raw_base_url`) for defence in depth.
+(`raw_base_url`) for defence in depth. tibi itself answers every route on
+any host name, so for real separation let the reverse proxy send only raw
+paths (`/{id}.{ext}`, `/{id}/raw`, `/{id}/dl`, `/{id}/thumb`) to tibi on
+the raw host. Raw content is safe on the main host too — it is never
+served as active content — so this is an extra layer, not a requirement.
 
 Share links for private items are signed with a key the server creates on
 first start at `data_dir/secret.key` (or `secret_key_file`), mode 0600.
@@ -169,8 +174,11 @@ URLs (including `Range`), and delete + GC leave no object versions behind.
 - `proxy` (default): tibi streams every blob itself and applies all its
   security headers.
 - `redirect`: raw image/video/audio URLs and `/dl` downloads answer with a
-  302 to a presigned object-store URL valid for one hour (or until the item
-  expires, if sooner), saving tibi's bandwidth. Text and anything that could
+  302 to a presigned object-store URL valid for 15 minutes (or until the
+  item expires, if sooner), saving tibi's bandwidth. Each redirect counts
+  as the whole object against the daily caps; while a presigned URL is
+  valid, whoever has it can fetch the object straight from the bucket,
+  past the caps and hotlink checks — use `proxy` where that matters. Text and anything that could
   execute in a browser (HTML, SVG, JavaScript, …) are always proxied, as are
   private and burn-after-read items. With the `fs` backend, `redirect`
   behaves like `proxy`.
@@ -204,6 +212,8 @@ max_upload_bytes = 52428800        # one request
 max_item_bytes_per_day = 0         # per item, 0 = unlimited
 max_total_bytes_per_day = 0        # whole instance, 0 = unlimited
 allowed_referers = []              # e.g. ["blog.example.com", "*.example.org"]
+rate_limit = 1200                  # API requests per minute per token, 0 = off
+rate_burst = 200
 ```
 
 - **Daily bandwidth caps.** Bytes served by raw, download and thumbnail
@@ -215,10 +225,31 @@ allowed_referers = []              # e.g. ["blog.example.com", "*.example.org"]
 - **Hotlink protection.** With `allowed_referers` set, images, video and
   audio requested from pages on other sites answer `403`. Requests without
   a `Referer` (direct visits, chat apps, most apps) and tibi's own pages
-  are always allowed; downloads are not affected.
+  are always allowed. This applies to `/dl` of media too (it can be
+  embedded as well); text and other files are not affected.
 - **Per-token quota.** `tibi admin token create … --quota 10GiB` limits the
   total size of a token's live items; uploads beyond it answer `413` with
-  the numbers. `whoami` reports `used_bytes`.
+  the numbers. Unfinished resumable uploads count as used. `whoami` reports
+  `used_bytes`.
+- **Rate limit.** Each token may make `rate_limit` API requests per minute
+  in bursts of `rate_burst`; beyond that, `429` with `Retry-After`. Public
+  pages and raw URLs are not limited by tibi: limit them per client IP in
+  the reverse proxy, e.g. nginx:
+
+  ```nginx
+  limit_req_zone $binary_remote_addr zone=tibi:10m rate=20r/s;
+  server {
+      location / {
+          limit_req zone=tibi burst=100 nodelay;
+          proxy_pass http://127.0.0.1:8070;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      }
+  }
+  ```
+- **Image decoding.** Thumbnails are made only for images whose decoded
+  pixels fit in 256 MB, two at a time; HEIC conversions also run two at a
+  time, with ImageMagick limited to 256 MiB of memory.
 
 Counters (`view_count`, `bytes_served`, daily totals) are kept in memory
 and written to the database every 10 seconds and at shutdown.
@@ -228,9 +259,11 @@ and written to the database every 10 seconds and at shutdown.
 - `GET /healthz` — liveness (checks the database).
 - `GET /metrics` — Prometheus text format: requests by method and status,
   upload/served bytes, GC activity, items by kind, storage used, today's
-  traffic. Allowed with an admin token, or on a direct connection from the
-  same machine. Requests forwarded by a reverse proxy never count as local,
-  so a public `/metrics` needs the token:
+  traffic. Needs an admin token. Behind a reverse proxy on the same
+  machine every request arrives from localhost, so "local means trusted"
+  is off by default; set `metrics_allow_local = true` (or
+  `TIBI_METRICS_ALLOW_LOCAL=true`) to let a direct local connection without
+  `X-Forwarded-For` scrape without a token. With the token:
 
   ```yaml
   scrape_configs:
@@ -290,6 +323,14 @@ heic_converter = "auto"   # auto | vips | heif-convert | magick | off | /path/to
 `auto` uses the first of `vips`, `heif-convert`, `magick` found in `PATH`
 (the server logs which one at startup). A custom command is run as
 `command INPUT.heic OUTPUT.jpg`. Each conversion has a 60 s timeout.
+tibi names the input format explicitly (`vips heifload`, `magick heic:…`)
+so an upload that only claims to be HEIC never reaches another decoder.
+
+**Metadata.** Converted HEIC photos lose their EXIF (location included),
+like other images. Without a working converter a HEIC photo is stored
+as-is, metadata and all; the same holds for GIF and AVIF, whose metadata
+tibi does not strip. Install a converter if your users upload phone
+photos.
 
 The tools need libheif **with an HEVC decoder plugin**. On Debian/Ubuntu:
 
