@@ -75,7 +75,6 @@ done_url() { # n timeout-seconds
   done
   fail "upload $1 did not finish in $2 s"
 }
-# The clipboard, read the way a user would: paste into the app's server field.
 # Taps the view with this resource id (waits for it to appear).
 tap_id() {
   local b=
@@ -88,7 +87,19 @@ tap_id() {
   set -- $b
   $ADB shell input tap $((($1 + $3) / 2)) $((($2 + $4) / 2))
 }
-clipboard() {
+# The clipboard, read the way a user would: paste into the app's server
+# field. Pasting through injected keys is timing-sensitive on slow CI
+# emulators, so try a few times until the expected text shows up.
+clipboard() { # expected
+  local got=
+  for _ in 1 2 3; do
+    got=$(clipboard_once)
+    [ "$got" = "$1" ] && break
+    sleep 2
+  done
+  echo "$got"
+}
+clipboard_once() {
   $ADB shell am start -W -n $PKG/.SettingsActivity >/dev/null
   sleep 1
   tap_id server
@@ -124,7 +135,7 @@ for _ in $(seq 10); do shown=$(ui | grep 'tibi.android:id/url' | grep -oE ' text
 [ "$shown" = "$u1" ] || fail "share dialog shows '$shown', want $u1"
 ui | grep 'tibi.android:id/share"' >/dev/null || fail "no Share button in the dialog"
 tap_id close   # "Done", as a user would
-clip=$(clipboard)
+clip=$(clipboard "$u1")
 [ "$clip" = "$u1" ] || fail "clipboard: '$clip', want $u1"
 # ...and the app's main screen lists it under recent links.
 $ADB shell am start -W -n $PKG/.SettingsActivity >/dev/null
@@ -145,7 +156,7 @@ u2=$(done_url 2 60)
 col=$(api /api/v1/collections/${u2##*/})
 [ "$(jq '.items | length' <<<"$col")" = 5 ] || fail "collection: $col"
 [ "$(jq -r '[.items[].filename] | join(",")' <<<"$col")" = "five-1.jpg,five-2.jpg,five-3.jpg,five-4.jpg,five-5.jpg" ] || fail "order: $col"
-[ "$(clipboard)" = "$u2" ] || fail "clipboard after collection"
+[ "$(clipboard "$u2")" = "$u2" ] || fail "clipboard after collection"
 echo "OK: five photos → one collection $u2 (5 items, in order)"
 
 # 3. Airplane mode in the middle of a big upload; it continues afterwards.

@@ -24,9 +24,10 @@ details are in [DEPLOY.md](DEPLOY.md); the API rules in [API.md](API.md).
 - API tokens are 32 random characters, stored as SHA-256 hashes, compared
   in constant time, never logged. Scopes: `upload`, `delete`,
   `read_private`, `admin`.
-- **Private items** exist only for tokens with `read_private` and for the
-  token that uploaded them — on public URLs and in every API operation.
-  Give phones, browser extensions and scripts `upload` only.
+- **Private items** open on public URLs only with a `read_private` token
+  or a signed share link. In the API they exist only for tokens with
+  `read_private` and for the token that uploaded them. Give phones,
+  browser extensions and scripts `upload` only.
 - **Unlisted** items (the default) are public to anyone who has the link;
   IDs are 8 random characters (about 47 bits).
 - Signed share links are HMAC-SHA256 over the item ID and expiry with a

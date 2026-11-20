@@ -20,21 +20,25 @@ end-to-end encryption (A9); see `docs/SECURITY.md`.
   Encrypted burn items keep their key across the reveal and decrypt (they
   used to be destroyed unreadable). Cross-site reveals are refused; share
   links to private burn items work.
-- Daily bandwidth caps count a response's bytes when it starts, so
-  parallel downloads cannot overshoot them; presigned redirect URLs last
+- Daily bandwidth caps reserve a response's full size when it starts
+  (unsent bytes are given back), so parallel downloads — with or without
+  overlapping ranges — cannot overshoot them; presigned redirect URLs last
   15 minutes (was 1 hour) and are not cached by shared caches.
-- Quotas count unfinished resumable uploads and are checked atomically
-  with the commit, and again when a resumable upload completes.
+- Quotas count unfinished resumable uploads (cancelled ones stop
+  counting) and are checked atomically with the commit — under a lock per
+  token — and again when a resumable upload completes.
 - Per-token API rate limit (`rate_limit`, `rate_burst`; 429 with
   `Retry-After`), as PLAN A8.7 always specified.
-- Image decompression bombs: thumbnails are limited by decoded bytes (a
-  16-bit 9999×9999 PNG decoded to 800 MB) and made two at a time; HEIC
+- Image decompression bombs: thumbnails are limited by estimated decoded
+  bytes (a 16-bit 9999×9999 PNG decoded to 800 MB; progressive JPEGs are
+  counted with their coefficients) and made one at a time; HEIC
   converters get the input format named explicitly, memory limits, and
   run two at a time.
 - Multipart uploads: at most 100 files and 50 fields per request (20 000
   parts held 40 000 file descriptors open).
 - Search no longer crashes on pastes with characters whose lower case is
-  longer in UTF-8 (Ⱥ).
+  longer in UTF-8 (Ⱥ); the case-insensitive snippet match is linear.
+- Expiries are capped at 100 years (`1e300d` overflowed into the past).
 - Hotlink protection covers `/dl` of media.
 - `/metrics` needs an admin token unless `metrics_allow_local` is set (a
   same-machine reverse proxy made every request look local).

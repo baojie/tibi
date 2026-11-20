@@ -14,10 +14,11 @@ info:
     scopes: `upload` (upload, list, search, view metadata, change metadata),
     `delete`, `read_private` (see private items) and `admin` (all of them).
 
-    **Private items** are visible — on public URLs and through this API
-    alike — only to tokens with `read_private` and to the token that
-    uploaded them; to any other token they do not exist (404, absent from
-    lists and search, hidden inside collections). So a token kept on a
+    **Private items** are visible through this API only to tokens with
+    `read_private` and to the token that uploaded them; to any other token
+    they do not exist (404, absent from lists and search, hidden inside
+    collections). Their public URLs need a `read_private` token or a signed
+    share link. So a token kept on a
     phone or in a browser extension with just `upload` cannot read the
     owner's private items if it leaks.
 
