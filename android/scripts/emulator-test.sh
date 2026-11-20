@@ -117,7 +117,7 @@ echo "OK: one photo → $u1 (in clipboard and notification)"
 # 2. Five photos → one collection.
 uris=()
 for i in 1 2 3 4 5; do
-  $MAGICK -size 800x600 "xc:hsl($((i * 60)),80%,50%)" -pointsize 120 -gravity center -annotate 0 "$i" "$work/five-$i.jpg"
+  $MAGICK -size 800x600 "xc:hsl($((i * 60)),80%,50%)" "$work/five-$i.jpg"
   uris+=("$(add_media "$work/five-$i.jpg" Pictures content://media/external/images/media)")
 done
 share 'image/*' "${uris[@]}"
