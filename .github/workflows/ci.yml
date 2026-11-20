@@ -41,3 +41,27 @@ jobs:
           go-version-file: go.mod
       - name: test on S3
         run: scripts/test-s3.sh -race ./...
+  package:
+    # Keep the release pipeline working without publishing anything:
+    # a GoReleaser snapshot (binaries, archives, .deb) and the Docker image.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean --skip=docker
+        env:
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          HOMEBREW_TAP_TOKEN: unused
+      - name: .deb contents
+        run: dpkg -c dist/*_linux_amd64.deb | grep -E "usr/bin/tibi|tibi.service|etc/tibi/server.toml"
+      - name: Docker image (HEIC converter present)
+        run: |
+          docker build -t tibi:ci .
+          docker run --rm --entrypoint vips tibi:ci --version

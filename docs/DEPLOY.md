@@ -3,6 +3,40 @@
 This guide grows with each release. It currently covers configuration and
 blob storage (local disk or S3-compatible object storage).
 
+## Installing
+
+Release builds (once published) provide:
+
+- **Binaries** for Linux (amd64, arm64), macOS (arm64) and Windows (amd64,
+  for the client), as archives with the docs and client integrations.
+- **A `.deb`** that installs `/usr/bin/tibi`, a hardened systemd unit, a
+  `tibi` system user, `/var/lib/tibi` and `/etc/tibi/server.toml`:
+
+  ```sh
+  sudo apt install ./tibi_<version>_linux_amd64.deb   # pulls libvips-tools for HEIC
+  sudoedit /etc/tibi/server.toml                       # at least base_url
+  sudo systemctl enable --now tibi
+  sudo -u tibi tibi admin token create --name me --scopes upload,delete,read_private --config /etc/tibi/server.toml
+  ```
+
+  Secrets (S3 keys) go in `/etc/tibi/env` (mode 0600), read by the unit.
+  Removing the package keeps your data and the `tibi` user.
+- **A Docker image** (`ghcr.io/<owner>/tibi`, amd64 and arm64) with the
+  HEIC converter included:
+
+  ```sh
+  docker run -d --name tibi -p 127.0.0.1:8070:8070 \
+    -v tibi-data:/data -e TIBI_BASE_URL=https://tibi.example.com ghcr.io/<owner>/tibi
+  docker exec tibi tibi admin token create --name me --scopes upload,delete,read_private
+  ```
+
+  The server runs as uid 10001; a bind-mounted data directory must be
+  writable by it (`chown 10001 /srv/tibi-data`). `docker build -t tibi .`
+  builds the same image from source.
+
+Put a reverse proxy with TLS in front (Caddy, nginx); with nginx raise
+`client_max_body_size` to at least `max_upload_bytes`.
+
 ## Configuration
 
 The server reads `/etc/tibi/server.toml` (or `--config PATH`, or

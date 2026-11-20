@@ -8,7 +8,11 @@ can share.
 Status: early development (see `CHANGELOG.md`). The design and roadmap live in
 `PLAN.md`.
 
-## Quick start
+Install: release binaries, a `.deb` with a systemd unit, or the Docker
+image — see `docs/DEPLOY.md`. Upload from the CLI, curl, the web page,
+ShareX, Flameshot or PicGo — see `docs/CLIENTS.md`.
+
+## Quick start (from source)
 
 ```sh
 go build -o tibi ./cmd/tibi

@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.11] — Packaging and ecosystem
+
+### Added
+- GoReleaser configuration: binaries for linux/amd64, linux/arm64,
+  darwin/arm64 and windows/amd64 (pure Go, no cgo), archives with docs and
+  integrations, checksums, `.deb` packages, a multi-arch image on GHCR and
+  a Homebrew cask. The release workflow is switched off until the
+  repository variable `RELEASE_ENABLED` is `true`; CI builds a snapshot and
+  the Docker image on every push without publishing.
+- `.deb`: hardened systemd unit (`ProtectSystem=strict`, own state
+  directory), `tibi` system user, `/etc/tibi/server.toml`, docs; recommends
+  `libvips-tools` and the libde265 HEIF plugin for HEIC conversion.
+- `Dockerfile`: Debian trixie with `vips` and the HEVC decoder, non-root
+  (uid 10001), data in `/data`.
+- Integrations: ShareX custom uploader (`integrations/sharex/tibi.sxcu`),
+  Flameshot script (`integrations/flameshot/tibi-shot`), and the
+  `picgo-plugin-tibi` uploader for PicGo/PicList (tested against PicGo core
+  1.8).
+- `docs/CLIENTS.md`: CLI, curl, web page, ShareX, Flameshot, PicGo/PicList.
+- `go run ./tools/apidoc -check` fails when `docs/API.md` is stale (run
+  before every release build).
+
 ## [0.0.10] — Operations: cost control, metrics, export
 
 ### Added
