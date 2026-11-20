@@ -255,4 +255,15 @@ func TestResumableQuota(t *testing.T) {
 	if resp, _ := upload(t, e, tok, "", make([]byte, 100)); resp.StatusCode != 201 {
 		t.Fatalf("upload that fits: %d", resp.StatusCode)
 	}
+	// Cancelling the pending upload gives its space back.
+	req, _ := http.NewRequest("DELETE", first.Header.Get("Location"), nil)
+	req.Header.Set("Tus-Resumable", "1.0.0")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	if r, err := http.DefaultClient.Do(req); err != nil || r.StatusCode != 204 {
+		t.Fatalf("cancel: %v %v", r, err)
+	}
+	again := tusCreate(t, e, tok, "800", nil)
+	if again.StatusCode != 201 {
+		t.Fatalf("create after cancelling: %d", again.StatusCode)
+	}
 }

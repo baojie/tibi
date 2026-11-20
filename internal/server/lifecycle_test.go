@@ -380,7 +380,7 @@ func TestBurnConcurrentRevealAndKinds(t *testing.T) {
 	if grant == nil || strings.Contains(string(b), "data:image") {
 		t.Fatalf("burned image page: %s", b)
 	}
-	if _, got := get(t, strings.Replace(grant[1], e.Cfg.BaseURL, e.Srv.URL, 1)); !bytes.Equal(got, png) {
+	if _, got := get(t, e.Srv.URL+grant[1]); !bytes.Equal(got, png) {
 		t.Fatal("grant does not serve the image")
 	}
 	other := up(t, e, tok, "", []byte("x"))
@@ -391,7 +391,7 @@ func TestBurnConcurrentRevealAndKinds(t *testing.T) {
 		}
 	}
 	e.Advance(11 * time.Minute)
-	if status(t, strings.Replace(grant[1], e.Cfg.BaseURL, e.Srv.URL, 1), "") != 404 {
+	if status(t, e.Srv.URL+grant[1], "") != 404 {
 		t.Error("grant served after it expired")
 	}
 	// Another site cannot make a visitor's browser burn an item.

@@ -223,9 +223,13 @@ func TestDailyCapParallel(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
-			resp, err := (&http.Client{Transport: tr}).Get(it.DownloadURL)
+			req, _ := http.NewRequest("GET", it.DownloadURL, nil)
+			if i%2 == 1 { // ranges that make ServeContent send everything
+				req.Header.Set("Range", "bytes=0-0,0-")
+			}
+			resp, err := (&http.Client{Transport: tr}).Do(req)
 			if err != nil {
 				t.Error(err)
 				return
@@ -234,13 +238,13 @@ func TestDailyCapParallel(t *testing.T) {
 			codes[resp.StatusCode]++
 			bodies = append(bodies, resp.Body)
 			mu.Unlock()
-		}()
+		}(i)
 	}
 	wg.Wait()
 	for _, b := range bodies {
 		b.Close()
 	}
-	if codes[200] > 2 || codes[200]+codes[429] != 8 {
+	if codes[200]+codes[206] > 2 || codes[200]+codes[206]+codes[429] != 8 {
 		t.Fatalf("8 parallel downloads of 8 MiB under a 10 MiB cap: %v", codes)
 	}
 }

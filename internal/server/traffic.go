@@ -53,29 +53,6 @@ func (s *Server) reserveCap(w http.ResponseWriter, it *store.Item, n int64) (rel
 	return release, true
 }
 
-// expectedBytes estimates what a request for a size-byte blob will send:
-// the whole blob, or the first range asked for.
-func expectedBytes(r *http.Request, size int64) int64 {
-	rg, ok := strings.CutPrefix(r.Header.Get("Range"), "bytes=")
-	if !ok {
-		return size
-	}
-	first, _, _ := strings.Cut(rg, ",")
-	a, b, _ := strings.Cut(strings.TrimSpace(first), "-")
-	start, err1 := strconv.ParseInt(a, 10, 64)
-	end, err2 := strconv.ParseInt(b, 10, 64)
-	switch {
-	case a == "" && err2 == nil: // suffix: last N bytes
-		return min(end, size)
-	case err1 != nil:
-		return size
-	case b == "" || err2 != nil || end >= size:
-		return max(0, size-start)
-	default:
-		return max(0, end-start+1)
-	}
-}
-
 func (s *Server) capReply(w http.ResponseWriter, itemOver bool) {
 	now := s.store.Now().UTC()
 	midnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)

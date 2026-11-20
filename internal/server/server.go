@@ -28,16 +28,17 @@ import (
 
 // Server holds dependencies for the HTTP handlers.
 type Server struct {
-	burned  burnGrants
-	quotaMu sync.Mutex
-	limiter *rateLimiter
-	cfg     config.Server
-	store   *store.Store
-	blobs   blob.Store
-	ingest  *ingest.Pipeline
-	pages   map[string]map[string]*template.Template // locale → page
-	i18n    *i18n.Catalog
-	tempDir string
+	burned     burnGrants
+	quotaMu    sync.Mutex // guards quotaLocks
+	quotaLocks map[int64]*sync.Mutex
+	limiter    *rateLimiter
+	cfg        config.Server
+	store      *store.Store
+	blobs      blob.Store
+	ingest     *ingest.Pipeline
+	pages      map[string]map[string]*template.Template // locale → page
+	i18n       *i18n.Catalog
+	tempDir    string
 	// renderCache holds rendered text views (content is immutable).
 	renderCache *render.Cache
 	signer      *sign.Signer

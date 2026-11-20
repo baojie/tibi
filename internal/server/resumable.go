@@ -193,6 +193,15 @@ func (s *Server) tusRoute(fn http.HandlerFunc, owned bool) http.Handler {
 		if r.Method == http.MethodPatch && r.Body != nil {
 			r.Body = &countingReader{r.Body}
 		}
+		if r.Method == http.MethodDelete {
+			// A cancelled upload must stop counting against the quota.
+			sw := &statusWriter{ResponseWriter: w, status: 200}
+			inner.ServeHTTP(sw, r)
+			if sw.status == http.StatusNoContent {
+				s.store.FinishUpload(r.Context(), r.PathValue("id"), "", "cancelled")
+			}
+			return
+		}
 		inner.ServeHTTP(w, r)
 	})
 }

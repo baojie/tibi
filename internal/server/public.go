@@ -291,7 +291,9 @@ func (s *Server) serveBlob(w http.ResponseWriter, r *http.Request, it *store.Ite
 		}
 		return
 	}
-	release, ok := s.reserveCap(w, it, expectedBytes(r, it.Size))
+	// Reserve the whole blob: what a Range request actually sends is up to
+	// ServeContent (overlapping ranges or a stale If-Range get everything).
+	release, ok := s.reserveCap(w, it, it.Size)
 	if !ok {
 		return
 	}
@@ -526,7 +528,7 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 	case store.KindImage:
 		page = "image"
 		if o.burned {
-			vm.EmbedURL = template.URL(s.cfg.BaseURL + "/" + it.ID + "/burned/" + s.burned.issue(it, s.store.Now()))
+			vm.EmbedURL = template.URL("/" + it.ID + "/burned/" + s.burned.issue(it, s.store.Now()))
 		}
 	case store.KindText:
 		tv, err := s.loadTextView(r.Context(), it, !o.burned)

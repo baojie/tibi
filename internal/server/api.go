@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tibi/internal/id"
@@ -109,14 +110,27 @@ func (s *Server) quotaErrorExcept(r *http.Request, n int64, except string) strin
 		units.FormatBytes(used), units.FormatBytes(*t.QuotaBytes), units.FormatBytes(n))
 }
 
-// quotaLock serializes quota check and commit for tokens with a quota
-// (others pay nothing). Returns the unlock function.
+// quotaLock serializes quota check and commit per token with a quota
+// (others pay nothing): one token's slow upload (a long HEIC conversion, a
+// 2 GiB write to S3) holds up only that token's other uploads. Returns the
+// unlock function.
 func (s *Server) quotaLock(r *http.Request) func() {
-	if t := tokenFrom(r.Context()); t == nil || t.QuotaBytes == nil {
+	t := tokenFrom(r.Context())
+	if t == nil || t.QuotaBytes == nil {
 		return func() {}
 	}
 	s.quotaMu.Lock()
-	return s.quotaMu.Unlock
+	if s.quotaLocks == nil {
+		s.quotaLocks = map[int64]*sync.Mutex{}
+	}
+	m, ok := s.quotaLocks[t.ID]
+	if !ok {
+		m = &sync.Mutex{}
+		s.quotaLocks[t.ID] = m
+	}
+	s.quotaMu.Unlock()
+	m.Lock()
+	return m.Unlock
 }
 
 // opt reads an upload option from the query string or an X-Tibi-* header.
