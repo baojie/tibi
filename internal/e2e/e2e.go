@@ -194,10 +194,12 @@ func Decrypt(blob, k []byte, password string) (Header, []byte, error) {
 	if len(payload) < 4 {
 		return h, nil, ErrFormat
 	}
-	hl := int(binary.BigEndian.Uint32(payload))
-	if hl > len(payload)-4 {
+	// Compare in 64 bits: on 32-bit platforms int(uint32) can go negative.
+	hl64 := uint64(binary.BigEndian.Uint32(payload))
+	if hl64 > uint64(len(payload)-4) {
 		return h, nil, ErrFormat
 	}
+	hl := int(hl64)
 	if err := json.Unmarshal(payload[4:4+hl], &h); err != nil {
 		return h, nil, fmt.Errorf("%w: bad header", ErrFormat)
 	}

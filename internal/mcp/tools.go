@@ -63,7 +63,7 @@ var tools = []tool{
 				"text":  str("The text or code."),
 				"lang":  str("Language for highlighting, e.g. go, python, markdown, diff (default: detected)."),
 				"title": titleProp, "expires": expiresProp, "private": privateProp,
-				"encrypt": map[string]any{"type": "boolean", "description": "End-to-end encrypt: the server stores only ciphertext and the returned link carries the key after #k=. Use for secrets (credentials, logs with personal data). Default false."},
+				"encrypt": map[string]any{"type": "boolean", "description": "End-to-end encrypt: the server stores only ciphertext and the returned link carries the key after #k=. Use for secrets (credentials, logs with personal data). The title and lang are NOT encrypted: keep secrets out of them. The returned link contains the key, so treat it as the secret itself. Default false."},
 			},
 			"required": []string{"text"},
 		},

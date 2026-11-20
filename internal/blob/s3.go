@@ -96,11 +96,8 @@ func (s *S3) Put(ctx context.Context, key string, r io.Reader, size int64, mt st
 	if err != nil {
 		return err
 	}
-	if mt == "" {
-		mt = "application/octet-stream"
-	}
 	_, err = s.c.PutObject(ctx, s.bucket, name, r, size, minio.PutObjectOptions{
-		ContentType:  mt,
+		ContentType:  StoredType(mt),
 		CacheControl: "public, max-age=31536000, immutable",
 	})
 	if err != nil {
@@ -257,4 +254,19 @@ func Probe(ctx context.Context, s Store) error {
 		return fmt.Errorf("storage probe: delete failed: %w", err)
 	}
 	return nil
+}
+
+// StoredType is the Content-Type an object is stored with. tibi never hands
+// out bucket URLs except presigned ones that override the type, but a bucket
+// someone made public must not serve an uploaded page as text/html: only
+// passive types keep theirs.
+func StoredType(mt string) string {
+	t := strings.ToLower(strings.TrimSpace(strings.Split(mt, ";")[0]))
+	switch {
+	case t == "text/plain",
+		t == "image/png", t == "image/jpeg", t == "image/gif", t == "image/webp", t == "image/avif", t == "image/bmp",
+		strings.HasPrefix(t, "video/"), strings.HasPrefix(t, "audio/"):
+		return t
+	}
+	return "application/octet-stream"
 }

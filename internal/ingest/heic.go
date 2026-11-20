@@ -86,20 +86,31 @@ func (c *Converter) ToJPEG(ctx context.Context, in string, maxOut int64) ([]byte
 	out := filepath.Join(dir, "out.jpg")
 	ctx, cancel := context.WithTimeout(ctx, ConvertTimeout)
 	defer cancel()
+	// Name the input format instead of letting the tool sniff it: an
+	// upload claiming to be HEIC must not reach some other decoder (SVG,
+	// PostScript, …). Bound the tools' memory, and how many run at once.
 	var args []string
+	var env []string
 	switch c.Name {
 	case "vips":
-		args = []string{"copy", src, out + "[Q=90]"}
+		args = []string{"heifload", src, out + "[Q=90]"}
+		env = []string{"VIPS_BLOCK_UNTRUSTED=1"}
 	case "heif-convert":
 		args = []string{"-q", "90", src, out}
 	case "magick":
 		// [0]: HEIC files can hold several images (bursts, previews);
 		// without it magick writes out-0.jpg, out-1.jpg, ….
-		args = []string{src + "[0]", "-quality", "90", out}
+		args = []string{"-limit", "memory", "256MiB", "-limit", "map", "512MiB", "-limit", "area", "128MP",
+			"-limit", "width", "32KP", "-limit", "height", "32KP", "heic:" + src + "[0]", "-quality", "90", out}
 	default:
 		args = []string{src, out}
 	}
+	convSlots <- struct{}{}
+	defer func() { <-convSlots }()
 	cmd := exec.CommandContext(ctx, c.path, args...)
+	if env != nil {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -121,6 +132,10 @@ func (c *Converter) ToJPEG(ctx context.Context, in string, maxOut int64) ([]byte
 	}
 	return b, nil
 }
+
+// convSlots bounds concurrent external conversions (each can take hundreds
+// of MB for a large photo).
+var convSlots = make(chan struct{}, 2)
 
 func copyFile(from, to string) error {
 	b, err := os.ReadFile(from)

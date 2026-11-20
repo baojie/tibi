@@ -199,3 +199,17 @@ func TestSearchBackfill(t *testing.T) {
 		t.Fatalf("second backfill re-indexed %d", n)
 	}
 }
+
+// Characters whose lower case is longer in UTF-8 (Ⱥ → ⱥ) once crashed every
+// search matching the paste (security review, 0.1.0).
+func TestSearchSnippetCaseLengthChange(t *testing.T) {
+	e := testutil.New(t, nil)
+	tok := e.Token("t")
+	it := up(t, e, tok, "", []byte(strings.Repeat("Ⱥ", 40)+"zqymarker tail"))
+	for _, q := range []string{"zqymarker", "ZQYMARKER", "ⱥⱥ"} {
+		code, b := api(t, e, tok, "GET", "/api/v1/search?q="+url.QueryEscape(q), nil)
+		if code != 200 || !strings.Contains(string(b), it.ID) {
+			t.Fatalf("%q: %d %s", q, code, b)
+		}
+	}
+}

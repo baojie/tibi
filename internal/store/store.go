@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,6 +36,18 @@ type Store struct {
 
 // Open opens (creating if needed) the database at path and applies migrations.
 func Open(path string) (*Store, error) {
+	// The database holds private items' metadata and the search index of
+	// private pastes: create it owner-only, and take away world access from
+	// an existing one (SQLite gives -wal/-shm the database file's mode).
+	if path != ":memory:" && !strings.HasPrefix(path, "file:") {
+		if fi, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			if f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600); err == nil {
+				f.Close()
+			}
+		} else if err == nil && fi.Mode().Perm()&0o007 != 0 {
+			os.Chmod(path, fi.Mode().Perm()&^0o007)
+		}
+	}
 	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=synchronous(NORMAL)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"image"
+	"image/color"
 	"image/draw"
 
 	"github.com/gen2brain/webp"
@@ -13,9 +14,29 @@ import (
 // ThumbWidth is the width of generated thumbnails.
 const ThumbWidth = 400
 
-// maxThumbPixels guards against decompression bombs: images larger than
-// this are not decoded for thumbnails.
-const maxThumbPixels = 100_000_000
+// maxThumbBytes guards against decompression bombs: images whose decoded
+// pixels would take more memory than this get no thumbnail (they are still
+// stored and served). A tiny PNG can claim 10000×10000 at 16 bits per
+// channel, which decodes to 800 MB; counting bytes, not pixels, catches it.
+const maxThumbBytes = 256 << 20
+
+// thumbSlots bounds how many images are decoded at once, so parallel
+// uploads cannot multiply that memory.
+var thumbSlots = make(chan struct{}, 2)
+
+// decodedBytes estimates the memory image.Decode needs for an image.
+func decodedBytes(cfg image.Config) int64 {
+	bpp := int64(4)
+	switch cfg.ColorModel {
+	case color.RGBA64Model, color.NRGBA64Model:
+		bpp = 8
+	case color.Gray16Model:
+		bpp = 2
+	case color.GrayModel, color.AlphaModel:
+		bpp = 1
+	}
+	return int64(cfg.Width) * int64(cfg.Height) * bpp
+}
 
 // errNoThumb means no thumbnail can be made for this image type.
 var errNoThumb = errors.New("no thumbnail for this image")
@@ -32,9 +53,11 @@ func MakeThumb(data []byte, mt string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Width*cfg.Height > maxThumbPixels || cfg.Width == 0 || cfg.Height == 0 {
+	if cfg.Width <= 0 || cfg.Height <= 0 || decodedBytes(cfg) > maxThumbBytes {
 		return nil, errNoThumb
 	}
+	thumbSlots <- struct{}{}
+	defer func() { <-thumbSlots }()
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err

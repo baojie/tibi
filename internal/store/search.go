@@ -119,10 +119,11 @@ func (s *Store) Unindexed(ctx context.Context) ([]*Item, error) {
 
 // SearchFilter selects search results.
 type SearchFilter struct {
-	Query  string
-	Kind   string
-	Limit  int
-	Cursor string
+	Query   string
+	Kind    string
+	Limit   int
+	Cursor  string
+	Private PrivateAccess
 }
 
 // ErrBadQuery is returned for empty or unusable queries.
@@ -220,6 +221,10 @@ func (s *Store) Search(ctx context.Context, f SearchFilter) ([]SearchHit, string
 		q += ` AND i.kind = ?`
 		all = append(all, f.Kind)
 	}
+	if c, a := f.Private.clause("i."); c != "" {
+		q += c
+		all = append(all, a...)
+	}
 	if f.Cursor != "" {
 		ts, seq, err := decodeCursor(f.Cursor)
 		if err != nil {
@@ -281,9 +286,11 @@ func snippet(body, query string) string {
 	if body == "" {
 		return ""
 	}
-	lower := strings.ToLower(body)
 	for _, w := range strings.Fields(query) {
-		i := strings.Index(lower, strings.ToLower(w))
+		// Match on body itself: lower-casing can change byte lengths
+		// (U+023A Ⱥ is 2 bytes, ⱥ is 3), so an index into a lowered copy
+		// does not fit the original.
+		i := indexFold(body, w)
 		if i < 0 {
 			continue
 		}
@@ -311,4 +318,32 @@ func snippet(body, query string) string {
 		return s
 	}
 	return ""
+}
+
+// indexFold is strings.Index under Unicode case folding, returning a byte
+// offset into s.
+func indexFold(s, sub string) int {
+	if sub == "" {
+		return 0
+	}
+	for i := range s {
+		if hasPrefixFold(s[i:], sub) {
+			return i
+		}
+	}
+	return -1
+}
+
+func hasPrefixFold(s, prefix string) bool {
+	for _, pr := range prefix {
+		if s == "" {
+			return false
+		}
+		r, n := utf8.DecodeRuneInString(s)
+		if r != pr && unicode.ToLower(r) != unicode.ToLower(pr) && unicode.ToUpper(r) != unicode.ToUpper(pr) {
+			return false
+		}
+		s = s[n:]
+	}
+	return true
 }
