@@ -61,6 +61,10 @@ type Item struct {
 	DeletedAt     *int64
 
 	seq int64 // SQLite rowid: insertion order, breaks created_at ties in lists
+
+	// IndexBody is the start of a text item's content, indexed for search by
+	// CreateItem (not stored in the items table).
+	IndexBody string
 }
 
 // Live reports whether the item is neither deleted nor expired at unix time now.
@@ -100,7 +104,7 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 					return err
 				}
 			}
-			_, err := tx.ExecContext(ctx, `INSERT INTO items
+			res, err := tx.ExecContext(ctx, `INSERT INTO items
 				(id, kind, mime, orig_mime, filename, ext, size, sha256, title, lang, charset, width, height,
 				 duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, created_at, expires_at)
 				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -109,7 +113,19 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 				nullInt64(it.DurationMS), it.Thumb, it.Visibility,
 				nullStr(it.Slug), it.BurnAfterRead, nullStr(it.Source), nullStr(it.Meta), it.TokenID,
 				it.CreatedAt, nullInt64(it.ExpiresAt))
-			return err
+			if err != nil {
+				return err
+			}
+			rowid, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+			it.seq = rowid
+			body := it.IndexBody
+			if it.Kind == KindEncrypted {
+				body = "" // never index ciphertext
+			}
+			return indexItem(ctx, tx, rowid, it.Title, it.Filename, body)
 		})
 		if err != nil && strings.Contains(err.Error(), "UNIQUE") && strings.Contains(err.Error(), "items.id") && attempt < 5 {
 			continue
@@ -309,6 +325,17 @@ func (s *Store) UpdateItem(ctx context.Context, itemID string, p Patch) (*Item, 
 		}
 		if p.Title != nil {
 			if err := set("title", nullStr(*p.Title)); err != nil {
+				return err
+			}
+			// Re-index with the new title, keeping the indexed body.
+			var rowid int64
+			var filename sql.NullString
+			var body string
+			if err := tx.QueryRowContext(ctx, `SELECT i.rowid, i.filename, COALESCE(x.body, '')
+				FROM items i LEFT JOIN items_fts x ON x.rowid = i.rowid WHERE i.id = ?`, itemID).Scan(&rowid, &filename, &body); err != nil {
+				return err
+			}
+			if err := indexItem(ctx, tx, rowid, *p.Title, filename.String, body); err != nil {
 				return err
 			}
 		}

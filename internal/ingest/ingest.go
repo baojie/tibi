@@ -253,6 +253,11 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 	if it.Kind == store.KindImage {
 		p.prepareThumb(ctx, pr)
 	}
+	if it.Kind == store.KindText {
+		body := make([]byte, store.MaxIndexBytes)
+		m, _ := pr.file.ReadAt(body, 0)
+		it.IndexBody = string(body[:m])
+	}
 	ok = true
 	return pr, nil
 }
@@ -306,6 +311,29 @@ func (pr *Prepared) replace(dir string, b []byte) error {
 	pr.Close()
 	pr.file = f
 	return nil
+}
+
+// Backfill indexes items stored before search existed (or whose index rows
+// are missing), reading text content from the blob store.
+func Backfill(ctx context.Context, st *store.Store, bs blob.Store) (int, error) {
+	items, err := st.Unindexed(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, it := range items {
+		body := ""
+		if it.Kind == store.KindText {
+			if f, err := bs.Open(ctx, blob.Key(it.SHA256)); err == nil {
+				b, _ := io.ReadAll(io.LimitReader(f, store.MaxIndexBytes))
+				f.Close()
+				body = string(b)
+			}
+		}
+		if err := st.Index(ctx, it.ID, body); err != nil {
+			return 0, err
+		}
+	}
+	return len(items), nil
 }
 
 // prepareThumb renders the thumbnail unless the same image already has one.

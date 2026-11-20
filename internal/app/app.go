@@ -22,6 +22,7 @@ import (
 	"tibi/internal/blob"
 	"tibi/internal/config"
 	"tibi/internal/gc"
+	"tibi/internal/ingest"
 	"tibi/internal/migrate"
 	"tibi/internal/server"
 	"tibi/internal/store"
@@ -29,7 +30,7 @@ import (
 )
 
 // Version is set at build time via -ldflags "-X tibi/internal/app.Version=...".
-var Version = "0.0.6"
+var Version = "0.0.7"
 
 // Instance is an opened data directory.
 type Instance struct {
@@ -115,6 +116,11 @@ func Serve(args []string, stderr io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("%w (storage.s3: endpoint %s, bucket %s)", err, cfg.Storage.S3.Endpoint, cfg.Storage.S3.Bucket)
 		}
+	}
+	if n, err := ingest.Backfill(context.Background(), in.Store, in.Blobs); err != nil {
+		return fmt.Errorf("search index backfill: %w", err)
+	} else if n > 0 {
+		log.Info("indexed existing items for search", "items", n)
 	}
 	h, err := server.New(cfg, in.Store, in.Blobs, in.Tmp, log)
 	if err != nil {

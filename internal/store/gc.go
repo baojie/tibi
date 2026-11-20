@@ -23,29 +23,35 @@ func (s *Store) Purge(ctx context.Context) (PurgeResult, error) {
 	now := s.Now().Unix()
 	var res PurgeResult
 	err := s.tx(ctx, func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(ctx, `SELECT id, sha256 FROM items
+		rows, err := tx.QueryContext(ctx, `SELECT rowid, id, sha256 FROM items
 			WHERE (expires_at IS NOT NULL AND expires_at <= ?) OR (deleted_at IS NOT NULL AND deleted_at <= ?)`,
 			now, now-DeletedRetention)
 		if err != nil {
 			return err
 		}
 		var ids []string
+		var rowids []int64
 		hashes := map[string]bool{}
 		for rows.Next() {
+			var rowid int64
 			var itemID, sha string
-			if err := rows.Scan(&itemID, &sha); err != nil {
+			if err := rows.Scan(&rowid, &itemID, &sha); err != nil {
 				rows.Close()
 				return err
 			}
 			ids = append(ids, itemID)
+			rowids = append(rowids, rowid)
 			hashes[sha] = true
 		}
 		rows.Close()
 		if err := rows.Err(); err != nil {
 			return err
 		}
-		for _, itemID := range ids {
+		for i, itemID := range ids {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM items WHERE id = ?`, itemID); err != nil {
+				return err
+			}
+			if err := unindex(ctx, tx, rowids[i]); err != nil {
 				return err
 			}
 		}
