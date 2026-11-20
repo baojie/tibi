@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.10] — Operations: cost control, metrics, export
+
+### Added
+- Traffic counters: `view_count` (view pages and first-range raw hits) and
+  `bytes_served` per item, plus per-day totals, kept in memory and written
+  in batches every 10 seconds and at shutdown.
+- Daily bandwidth caps per item and per instance
+  (`max_item_bytes_per_day`, `max_total_bytes_per_day`): raw, download and
+  thumbnail URLs answer `429` with `Retry-After` until midnight UTC; the
+  view page explains (translated).
+- Hotlink protection for images, video and audio (`allowed_referers`,
+  with `*.example.com` wildcards); empty referers and tibi's own pages are
+  always allowed.
+- Per-token upload quotas (`--quota`), enforced on uploads, multipart
+  uploads and forks with a `413` that states the numbers; `whoami` reports
+  `used_bytes`.
+- `/metrics` in Prometheus format (admin token, or a direct local
+  connection; never through a proxy), `GET /api/v1/stats` (admin) and
+  `tibi admin stats`.
+- `tibi admin export` / `tibi admin import`: a `.tar.zst` with live items,
+  collections, tokens, blobs, thumbnails and the share-link key; import
+  into an empty instance (any backend) reproduces every URL byte for byte,
+  verifies each blob's hash and rebuilds the search index.
+- `docs/DEPLOY.md`: limits, monitoring, and backups with Litestream.
+
 ## [0.0.9] — Web experience
 
 ### Added

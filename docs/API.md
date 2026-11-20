@@ -1,4 +1,4 @@
-# tibi API 0.0.9
+# tibi API 0.0.10
 
 <!-- Generated from api/openapi.yaml by `go run ./tools/apidoc`. Do not edit. -->
 
@@ -18,6 +18,12 @@ scopes: `upload` (upload, list, search, view metadata, change metadata),
 
 **Web pages.** `/upload` and `/recent` are the owner's pages; they keep
 an API token in the browser's local storage and call this API.
+
+**Limits.** Raw content answers `429` (with `Retry-After`) once an item
+or the whole instance used up its daily bandwidth allowance; view pages
+stay available and explain. With `allowed_referers` set, images, video
+and audio embedded by other sites answer `403`. Uploads beyond a
+token's quota answer `413`.
 
 **Public URLs** (not part of this API) are fixed forever:
 `/{id}` view page, `/{id}.{ext}` raw bytes for embedding, `/{id}/raw`,
@@ -49,8 +55,10 @@ collection IDs share one namespace.
 | `PATCH` | [`/api/v1/collections/{id}`](#patch-api-v1-collections-id) | Change a collection or reorder its items |
 | `DELETE` | [`/api/v1/collections/{id}`](#delete-api-v1-collections-id) | Delete a collection and its items |
 | `GET` | [`/api/v1/openapi.yaml`](#get-api-v1-openapi-yaml) | This document |
+| `GET` | [`/api/v1/stats`](#get-api-v1-stats) | Instance statistics |
 | `GET` | [`/api/v1/whoami`](#get-api-v1-whoami) | Describe the calling token |
 | `GET` | [`/healthz`](#get-healthz) | Liveness probe |
+| `GET` | [`/metrics`](#get-metrics) | Prometheus metrics |
 
 <a id="get-api-v1-items"></a>
 ### `GET /api/v1/items`
@@ -128,7 +136,7 @@ Request body: `application/octet-stream` (string (binary)), `multipart/form-data
 | 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
-| 413 | The upload exceeds `max_upload_bytes`. | `application/json` [Error](#schema-error) |
+| 413 | The upload exceeds `max_upload_bytes`, or the token's upload quota (`message` gives the numbers). | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-items-id"></a>
 ### `GET /api/v1/items/{id}`
@@ -219,7 +227,7 @@ Request body: `application/octet-stream` (string (binary))
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
-| 413 | The upload exceeds `max_upload_bytes`. | `application/json` [Error](#schema-error) |
+| 413 | The upload exceeds `max_upload_bytes`, or the token's upload quota (`message` gives the numbers). | `application/json` [Error](#schema-error) |
 
 <a id="post-api-v1-items-id-share-link"></a>
 ### `POST /api/v1/items/{id}/share-link`
@@ -375,6 +383,19 @@ No authentication.
 |---|---|---|
 | 200 | The OpenAPI document. | `application/yaml` string |
 
+<a id="get-api-v1-stats"></a>
+### `GET /api/v1/stats`
+
+**Instance statistics**
+
+Storage, item counts, traffic and the most-served items. Requires scope `admin`.
+
+| status | meaning | body |
+|---|---|---|
+| 200 | Statistics. | `application/json` [Stats](#schema-stats) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+
 <a id="get-api-v1-whoami"></a>
 ### `GET /api/v1/whoami`
 
@@ -398,6 +419,21 @@ No authentication.
 |---|---|---|
 | 200 | The server and its database are up. | `text/plain` string |
 | 503 | The database is unavailable. | `text/plain` string |
+
+<a id="get-metrics"></a>
+### `GET /metrics`
+
+**Prometheus metrics**
+
+Prometheus text format: requests, upload and served bytes, GC
+activity, items by kind, storage used, today's traffic. Allowed with
+an `admin` token, or from the same machine on a direct connection
+(requests forwarded by a reverse proxy never count as local).
+
+| status | meaning | body |
+|---|---|---|
+| 200 | Metrics. | `text/plain` string |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 
 ## Schemas
 
@@ -540,6 +576,21 @@ An Item plus `snippet`, the line of text containing the first query word.
 | `expires_at` | integer | yes | Unix seconds. |
 | `url` | string (uri) | yes |  |
 
+<a id="schema-stats"></a>
+### Stats
+
+| field | type | required | description |
+|---|---|---|---|
+| `bytes_served_today` | integer | yes | Since midnight UTC; what daily caps count. |
+| `bytes_served_total` | integer | yes |  |
+| `collections` | integer | yes |  |
+| `items` | integer | yes | Live items. |
+| `items_by_kind` | object | yes | Live items per kind, e.g. `{"image": 12}`. |
+| `logical_bytes` | integer | yes | Total size of live items. |
+| `storage_bytes` | integer | yes | Bytes of distinct stored blobs (identical content is stored once). |
+| `tokens` | integer | yes | Active (not revoked) tokens. |
+| `top_items` | array of object | yes |  |
+
 <a id="schema-whoami"></a>
 ### Whoami
 
@@ -548,4 +599,5 @@ An Item plus `snippet`, the line of text containing the first query word.
 | `name` | string | yes |  |
 | `quota_bytes` | integer or null | yes | Upload quota in bytes; null for unlimited. |
 | `scopes` | array of string | yes |  |
+| `used_bytes` | integer | yes | Total size of the live items this token uploaded (what the quota counts). |
 

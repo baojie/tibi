@@ -31,6 +31,7 @@ func TestAuthErrorsEveryOperation(t *testing.T) {
 		{"GET", "/api/v1/collections/" + it.ID, nil},
 		{"PATCH", "/api/v1/collections/" + it.ID, map[string]string{"title": "t"}},
 		{"DELETE", "/api/v1/collections/" + it.ID, nil},
+		{"GET", "/api/v1/stats", nil},
 	}
 	for _, op := range ops {
 		if code, b := api(t, e, "", op.method, op.path, op.body); code != 401 {

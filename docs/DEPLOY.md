@@ -140,6 +140,86 @@ pass now; `tibi admin gc --orphans` also scans the store for blobs with no
 database row (left by a crash between storing a blob and recording it) and
 deletes those older than an hour.
 
+## Limits and cost control
+
+```toml
+max_upload_bytes = 52428800        # one request
+max_item_bytes_per_day = 0         # per item, 0 = unlimited
+max_total_bytes_per_day = 0        # whole instance, 0 = unlimited
+allowed_referers = []              # e.g. ["blog.example.com", "*.example.org"]
+```
+
+- **Daily bandwidth caps.** Bytes served by raw, download and thumbnail
+  URLs are counted per UTC day (with `redirect` delivery, a redirect counts
+  as the whole object, since the object store bills that egress). When an
+  item or the instance reaches its cap, those URLs answer `429` with
+  `Retry-After` until midnight UTC; view pages still load and explain.
+  Useful with S3/B2, whose egress costs money.
+- **Hotlink protection.** With `allowed_referers` set, images, video and
+  audio requested from pages on other sites answer `403`. Requests without
+  a `Referer` (direct visits, chat apps, most apps) and tibi's own pages
+  are always allowed; downloads are not affected.
+- **Per-token quota.** `tibi admin token create … --quota 10GiB` limits the
+  total size of a token's live items; uploads beyond it answer `413` with
+  the numbers. `whoami` reports `used_bytes`.
+
+Counters (`view_count`, `bytes_served`, daily totals) are kept in memory
+and written to the database every 10 seconds and at shutdown.
+
+## Monitoring
+
+- `GET /healthz` — liveness (checks the database).
+- `GET /metrics` — Prometheus text format: requests by method and status,
+  upload/served bytes, GC activity, items by kind, storage used, today's
+  traffic. Allowed with an admin token, or on a direct connection from the
+  same machine. Requests forwarded by a reverse proxy never count as local,
+  so a public `/metrics` needs the token:
+
+  ```yaml
+  scrape_configs:
+    - job_name: tibi
+      authorization: { credentials: tibi_… }   # an admin-scoped token
+      static_configs: [{ targets: ["tibi.example.com"] }]
+      scheme: https
+  ```
+- `tibi admin stats` (or `GET /api/v1/stats` with an admin token) —
+  storage, items, traffic today and in total, most-served items.
+
+## Backups
+
+**The database** (`data_dir/tibi.db`, SQLite in WAL mode) is best backed up
+continuously with [Litestream](https://litestream.io), which streams the
+WAL to S3/B2 and restores to any point in time. tibi does not embed it; run
+it next to tibi:
+
+```yaml
+# /etc/litestream.yml
+dbs:
+  - path: /var/lib/tibi/tibi.db
+    replicas:
+      - type: s3
+        endpoint: https://s3.us-west-004.backblazeb2.com
+        bucket: tibi-db-backup
+        path: tibi.db
+```
+
+```sh
+litestream replicate -config /etc/litestream.yml     # alongside tibi serve
+litestream restore -config /etc/litestream.yml /var/lib/tibi/tibi.db   # on a new machine
+```
+
+Back up `data_dir/secret.key` too (share links depend on it). Blobs on
+S3/B2 are already off the machine; blobs on local disk need their own copy
+(e.g. `restic` or `rsync` of `data_dir/blobs`).
+
+**Full export.** `tibi admin export --out tibi-export.tar.zst` writes every
+live item with its metadata, the collections, the tokens (hashed) and the
+share-link key into one archive; `tibi admin import tibi-export.tar.zst`
+restores it into an **empty** instance (with any storage backend) so that
+every URL — raw bytes, short links, collections, share links — works as
+before. Restart the server after an import. The archive contains private
+content: store it like the database.
+
 ## HEIC photos (iPhone, many Android phones)
 
 Browsers cannot show HEIC, and there is no mature pure-Go decoder, so tibi

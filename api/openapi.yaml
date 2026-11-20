@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.9
+  version: 0.0.10
   description: |
     tibi (题壁) is a self-hosted image host and pastebin: upload an image, a
     text or code snippet, or any file, and get back a URL to share.
@@ -19,6 +19,12 @@ info:
 
     **Web pages.** `/upload` and `/recent` are the owner's pages; they keep
     an API token in the browser's local storage and call this API.
+
+    **Limits.** Raw content answers `429` (with `Retry-After`) once an item
+    or the whole instance used up its daily bandwidth allowance; view pages
+    stay available and explain. With `allowed_referers` set, images, video
+    and audio embedded by other sites answer `403`. Uploads beyond a
+    token's quota answer `413`.
 
     **Public URLs** (not part of this API) are fixed forever:
     `/{id}` view page, `/{id}.{ext}` raw bytes for embedding, `/{id}/raw`,
@@ -61,6 +67,38 @@ paths:
           content:
             text/plain:
               schema: { type: string }
+  /metrics:
+    get:
+      tags: [meta]
+      summary: Prometheus metrics
+      operationId: metrics
+      description: |
+        Prometheus text format: requests, upload and served bytes, GC
+        activity, items by kind, storage used, today's traffic. Allowed with
+        an `admin` token, or from the same machine on a direct connection
+        (requests forwarded by a reverse proxy never count as local).
+      security: [{}, { bearer: [] }]
+      responses:
+        "200":
+          description: Metrics.
+          content:
+            text/plain:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/stats:
+    get:
+      tags: [meta]
+      summary: Instance statistics
+      operationId: stats
+      description: Storage, item counts, traffic and the most-served items. Requires scope `admin`.
+      responses:
+        "200":
+          description: Statistics.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stats" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/openapi.yaml:
     get:
       tags: [meta]
@@ -499,7 +537,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     TooLarge:
-      description: The upload exceeds `max_upload_bytes`.
+      description: The upload exceeds `max_upload_bytes`, or the token's upload quota (`message` gives the numbers).
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -524,9 +562,10 @@ components:
     Whoami:
       type: object
       additionalProperties: false
-      required: [name, scopes, quota_bytes]
+      required: [name, scopes, quota_bytes, used_bytes]
       properties:
         name: { type: string }
+        used_bytes: { type: integer, description: Total size of the live items this token uploaded (what the quota counts). }
         scopes:
           type: array
           items: { type: string, enum: [upload, read_private, delete, admin] }
@@ -572,6 +611,32 @@ components:
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Item" } }
         next_cursor: { type: [string, "null"], description: Pass as `cursor` for the next page; null on the last page. }
+    Stats:
+      type: object
+      additionalProperties: false
+      required: [items, items_by_kind, logical_bytes, storage_bytes, bytes_served_total, bytes_served_today, collections, tokens, top_items]
+      properties:
+        items: { type: integer, description: Live items. }
+        items_by_kind: { type: object, description: "Live items per kind, e.g. `{\"image\": 12}`." }
+        logical_bytes: { type: integer, description: Total size of live items. }
+        storage_bytes: { type: integer, description: Bytes of distinct stored blobs (identical content is stored once). }
+        bytes_served_total: { type: integer }
+        bytes_served_today: { type: integer, description: Since midnight UTC; what daily caps count. }
+        collections: { type: integer }
+        tokens: { type: integer, description: Active (not revoked) tokens. }
+        top_items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, url, kind, name, view_count, bytes_served]
+            properties:
+              id: { type: string }
+              url: { type: string, format: uri }
+              kind: { $ref: "#/components/schemas/Kind" }
+              name: { type: string }
+              view_count: { type: integer }
+              bytes_served: { type: integer }
     ShareLink:
       type: object
       additionalProperties: false

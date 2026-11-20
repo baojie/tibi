@@ -37,7 +37,7 @@ func contractChecked(t testing.TB, h http.Handler) http.Handler {
 		t.Fatalf("openapi.yaml: %v", err)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/healthz" {
+		if !strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/healthz" && r.URL.Path != "/metrics" {
 			h.ServeHTTP(w, r)
 			return
 		}
