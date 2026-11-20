@@ -318,6 +318,17 @@ if wanted 0.1.0; then
   scene "{\"out\":\"$out/v0.1.0.png\",\"term\":\"$T\",\"title\":\"private items, signed links, rate limits\",\"width\":1100}"
 fi
 
+# 0.1.1 — the upload page labels its two copy buttons: link and Markdown.
+if wanted 0.1.1; then
+  run="localStorage.setItem('tibi.token', '$TIBI_TOKEN'); location.reload()"
+  paste="(async () => { const b = await (await fetch('$(cd "$demo" && tibi up --raw a.jpg)')).blob();
+    const dt = new DataTransfer(); dt.items.add(new File([b], 'screenshot.png', { type: b.type }));
+    document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); })()"
+  scene "$(jq -nc --arg out "$out/v0.1.1.png" --arg url "$base/upload" --arg run "$run" --arg paste "$paste" \
+    '{out:$out,url:$url,width:1100,height:760,run:$run,waitAfter:"!document.getElementById(\"uploader\").hidden",
+      then:$paste,waitThen:"document.querySelector(\"#results .result-link\")"}')"
+fi
+
 echo "{}]" >> "$scenes"
 jq -c '[.[] | select(.out)]' "$scenes" > "$scenes.ok"
 node "$repo/scripts/screenshots/shot.mjs" "$scenes.ok" "${CHROME:-google-chrome}"

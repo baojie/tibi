@@ -4,9 +4,13 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
-## [Unreleased]
+## [0.1.1] — First public release
+
+![The upload page: a link button and a Markdown button](docs/screenshots/v0.1.1.png)
 
 ### Added
+- Install with `go install github.com/baojie/tibi/cmd/tibi@latest`: the Go
+  module is now `github.com/baojie/tibi`.
 - A screenshot for every version, under its heading here and in the GitHub
   release notes (`docs/screenshots/`, made by `scripts/screenshots/` from
   real runs; `scripts/release-notes.sh`). A test fails when a version has
