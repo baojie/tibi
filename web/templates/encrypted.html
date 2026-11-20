@@ -4,7 +4,7 @@
   <h1><span id="e2e-name">{{.Title}}</span></h1>
   <p class="notice muted">🔒 {{t "e2e.note"}}</p>
   {{template "notices" .}}
-  <div id="e2e" data-raw="{{.LocalRaw}}" data-lang="{{.Item.Lang}}"{{with .Ciphertext}} data-ciphertext="{{.}}"{{end}}>
+  <div id="e2e" data-raw="{{.LocalRaw}}" data-lang="{{.Item.Lang}}">
     <p id="e2e-status" class="notice" aria-live="polite">{{t "e2e.decrypting"}}</p>
     <form id="e2e-password" class="row" hidden>
       <input name="password" type="password" autocomplete="off" placeholder="{{t "e2e.password_placeholder"}}" required>

@@ -111,7 +111,7 @@ func TestEncryptedValidationAndBurn(t *testing.T) {
 	it := up(t, e, tok, "?kind=encrypted&burn_after_read=1", blob)
 	// Reveal: the ciphertext is embedded, since the raw URL is gone after.
 	resp, err := httpPost(e.Srv.URL + "/" + it.ID + "/reveal")
-	if err != nil || resp.code != 200 || !strings.Contains(resp.body, "data-ciphertext=") {
+	if err != nil || resp.code != 200 || !strings.Contains(resp.body, `data-raw="/`+it.ID+`/burned/`) {
 		t.Fatalf("burned encrypted reveal: %+v %v", resp, err)
 	}
 	if status(t, it.RawURL, "") != 404 {

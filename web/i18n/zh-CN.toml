@@ -105,3 +105,4 @@
 "e2e.password_placeholder" = "密码"
 "e2e.unlock" = "解密"
 "e2e.download" = "下载解密后的文件"
+"burn.notice_encrypted" = "这个加密条目只能打开一次。点击后会立即从服务器删除，再用链接里的密钥在这里解密。"

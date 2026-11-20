@@ -1,9 +1,10 @@
 {{define "content"}}
 <section class="item item-burn">
   <h1>{{.Title}}</h1>
-  <p>{{if eq .Kind "image"}}{{t "burn.notice_image"}}{{else if eq .Kind "text"}}{{t "burn.notice_text"}}{{else}}{{t "burn.notice_file"}}{{end}}</p>
-  <form method="post" action="{{.Action}}">
-    <button type="submit" class="button">{{if or (eq .Kind "image") (eq .Kind "text")}}{{t "action.reveal"}}{{else}}{{t "action.download"}}{{end}}</button>
+  <p>{{if eq .Kind "image"}}{{t "burn.notice_image"}}{{else if eq .Kind "text"}}{{t "burn.notice_text"}}{{else if eq .Kind "encrypted"}}{{t "burn.notice_encrypted"}}{{else}}{{t "burn.notice_file"}}{{end}}</p>
+  <form id="burn-form" method="post" action="{{.Action}}">
+    <button type="submit" class="button">{{if or (eq .Kind "image") (eq .Kind "text") (eq .Kind "encrypted")}}{{t "action.reveal"}}{{else}}{{t "action.download"}}{{end}}</button>
   </form>
 </section>
+<script src="/static/burn.js" defer></script>
 {{end}}

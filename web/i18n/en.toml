@@ -106,3 +106,4 @@
 "e2e.password_placeholder" = "Password"
 "e2e.unlock" = "Decrypt"
 "e2e.download" = "Download decrypted file"
+"burn.notice_encrypted" = "This encrypted item can be opened only once. It will be deleted from the server as soon as you reveal it, then decrypted here with the key in your link."

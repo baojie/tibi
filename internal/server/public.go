@@ -2,10 +2,8 @@ package server
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"html/template"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,6 +31,10 @@ func (s *Server) handleItemRoutes(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if !s.sameOrigin(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		s.handleReveal(w, r, parts[0])
 		return
 	}
@@ -52,6 +54,8 @@ func (s *Server) handleItemRoutes(w http.ResponseWriter, r *http.Request) {
 		s.handleDownload(w, r, parts[0])
 	case len(parts) == 2 && parts[1] == "thumb":
 		s.handleThumb(w, r, parts[0])
+	case len(parts) == 3 && parts[1] == "burned":
+		s.handleBurned(w, r, parts[0], parts[2])
 	default:
 		notFound(w)
 	}
@@ -74,7 +78,7 @@ func (s *Server) handleItemOrRaw(w http.ResponseWriter, r *http.Request, name st
 		return
 	}
 	if it.BurnAfterRead && !acc.privileged {
-		s.renderBurnNotice(w, r, it)
+		s.renderBurnNotice(w, r, it, acc.signQuery)
 		return
 	}
 	s.renderView(w, r, it, viewOpts{signQuery: acc.signQuery})
@@ -137,7 +141,8 @@ func (s *Server) serveRaw(w http.ResponseWriter, r *http.Request, it *store.Item
 		notFound(w)
 		return
 	}
-	if (!download && s.hotlinkBlocked(w, r, it)) || s.overCap(w, it) {
+	// Downloads too: <img src=/{id}/dl> embeds as well as the raw URL.
+	if s.hotlinkBlocked(w, r, it) || s.overCap(w, it) {
 		return
 	}
 	s.serveBlob(w, r, it, download)
@@ -286,8 +291,12 @@ func (s *Server) serveBlob(w http.ResponseWriter, r *http.Request, it *store.Ite
 		}
 		return
 	}
+	release, ok := s.reserveCap(w, it, expectedBytes(r, it.Size))
+	if !ok {
+		return
+	}
 	cw := &countingWriter{ResponseWriter: w}
-	defer func() { s.usage.Add(it.ID, cw.n, countHit(r)); metrics.ServedBytes.Add(cw.n) }()
+	defer func() { release(); s.usage.Add(it.ID, cw.n, countHit(r)); metrics.ServedBytes.Add(cw.n) }()
 	w = cw
 	f, err := s.blobs.Open(r.Context(), blob.Key(it.SHA256))
 	if err != nil {
@@ -329,8 +338,11 @@ func redirectable(it *store.Item, download bool) bool {
 	return false
 }
 
-// presignTTL is how long redirect URLs stay valid.
-const presignTTL = time.Hour
+// presignTTL is how long redirect URLs stay valid. A presigned URL is a
+// bearer link straight to the bucket, outside tibi's caps and hotlink
+// checks, so keep it short — but long enough for a video player, which
+// keeps fetching ranges from the same URL while it plays.
+const presignTTL = 15 * time.Minute
 
 // redirectBlob sends a 302 to a presigned URL; false means "proxy instead"
 // (backend cannot presign, or presigning failed).
@@ -355,8 +367,9 @@ func (s *Server) redirectBlob(w http.ResponseWriter, r *http.Request, it *store.
 	if !ok {
 		return false
 	}
-	// Cache the redirect for a fraction of the URL's lifetime.
-	w.Header().Set("Cache-Control", "public, max-age="+strconv.Itoa(int(ttl.Seconds()/6)))
+	// Each redirect is counted as the whole object; let the requesting
+	// browser reuse it briefly, but no shared cache hand it to others.
+	w.Header().Set("Cache-Control", "private, max-age="+strconv.Itoa(int(min(60, ttl.Seconds()/6))))
 	http.Redirect(w, r, u, http.StatusFound)
 	return true
 }
@@ -404,8 +417,6 @@ type viewModel struct {
 	// OG holds link-preview (OpenGraph/Twitter) tags; nil when the item
 	// must not be previewed.
 	OG *ogMeta
-	// Ciphertext (base64) of a burned encrypted item: its raw URL is gone.
-	Ciphertext string
 }
 
 // ogMeta is what chat apps show when a link is pasted.
@@ -505,19 +516,8 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 	switch it.Kind {
 	case store.KindEncrypted:
 		page = "encrypted"
-		if o.burned {
-			f, err := s.blobs.Open(r.Context(), blob.Key(it.SHA256))
-			if err != nil {
-				s.fail(w, err)
-				return
-			}
-			b, err := io.ReadAll(f)
-			f.Close()
-			if err != nil {
-				s.fail(w, err)
-				return
-			}
-			vm.Ciphertext = base64.StdEncoding.EncodeToString(b)
+		if o.burned { // its raw URL is gone: e2e.js fetches the grant instead
+			vm.LocalRaw = "/" + it.ID + "/burned/" + s.burned.issue(it, s.store.Now())
 		}
 	case store.KindVideo:
 		page = "video"
@@ -526,12 +526,7 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 	case store.KindImage:
 		page = "image"
 		if o.burned {
-			uri, err := s.dataURI(r, it)
-			if err != nil {
-				s.fail(w, err)
-				return
-			}
-			vm.EmbedURL = uri
+			vm.EmbedURL = template.URL(s.cfg.BaseURL + "/" + it.ID + "/burned/" + s.burned.issue(it, s.store.Now()))
 		}
 	case store.KindText:
 		tv, err := s.loadTextView(r.Context(), it, !o.burned)
@@ -570,29 +565,21 @@ func (s *Server) writePage(w http.ResponseWriter, r *http.Request, page string, 
 	w.Write(buf.Bytes())
 }
 
-// dataURI inlines an image so it can be shown after its item is burned.
-func (s *Server) dataURI(r *http.Request, it *store.Item) (template.URL, error) {
-	f, err := s.blobs.Open(r.Context(), blob.Key(it.SHA256))
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return "", err
-	}
-	return template.URL("data:" + it.Mime + ";base64," + base64.StdEncoding.EncodeToString(b)), nil
-}
-
 // renderBurnNotice is the interstitial for burn-after-read items: link
 // previewers that GET the page see only this; the reveal is a POST.
-func (s *Server) renderBurnNotice(w http.ResponseWriter, r *http.Request, it *store.Item) {
+// signQuery carries a share link's signature into the reveal, which a
+// private item needs to be found at all.
+func (s *Server) renderBurnNotice(w http.ResponseWriter, r *http.Request, it *store.Item, signQuery string) {
+	action := "/" + it.ID + "/reveal"
+	if signQuery != "" {
+		action += "?" + signQuery
+	}
 	s.writePage(w, r, "burn", struct {
 		OG     *ogMeta // always nil: a burn item is never previewed
 		Title  string
 		Action string
 		Kind   string
-	}{nil, s.i18n.T(s.locale(r), "page.burn.title"), "/" + it.ID + "/reveal", it.Kind}, true)
+	}{nil, s.i18n.T(s.locale(r), "page.burn.title"), action, it.Kind}, true)
 }
 
 func formatDuration(ms int64) string {
