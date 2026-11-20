@@ -18,9 +18,9 @@ const ThumbWidth = 400
 // pixels would take more memory than this get no thumbnail (they are still
 // stored and served). A tiny PNG can claim 10000×10000 at 16 bits per
 // channel, which decodes to 800 MB; counting bytes, not pixels, catches it.
-// The limit admits a 48-megapixel phone JPEG (3 bytes per pixel) but not
-// an RGBA image beyond ~40 MP.
-const maxThumbBytes = 160 << 20
+// The limit admits a 48-megapixel baseline phone JPEG (3 bytes per pixel)
+// and a 12-megapixel progressive one, but not an RGBA image beyond ~50 MP.
+const maxThumbBytes = 192 << 20
 
 // thumbSlots bounds how many images are decoded at once, so parallel
 // uploads cannot multiply that memory.
@@ -40,7 +40,7 @@ func decodedBytes(cfg image.Config, progressiveJPEG bool) int64 {
 		bpp = 3
 	}
 	if progressiveJPEG {
-		bpp += 8 // Go keeps every coefficient as int32: 4 B/px/component, chroma usually subsampled
+		bpp += 12 // Go keeps every coefficient as int32: 4 B/px for each of 3 components (4:4:4)
 	}
 	return int64(cfg.Width) * int64(cfg.Height) * bpp
 }
@@ -62,7 +62,7 @@ func isProgressiveJPEG(b []byte) bool {
 			i++
 			continue
 		}
-		i += 2 + int(b[i+2])<<8 | int(b[i+3])
+		i += 2 + (int(b[i+2])<<8 | int(b[i+3])) // parenthesized: | binds like +
 	}
 	return false
 }

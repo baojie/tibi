@@ -26,8 +26,13 @@ var ErrNotFound = errors.New("store: not found")
 
 // Store wraps the SQLite database.
 type Store struct {
-	db  *sql.DB
-	Now func() time.Time
+	db *sql.DB
+	// search runs full-text queries on separate read-only connections
+	// (WAL lets readers proceed alongside the writer): a slow search must
+	// not hold up every page view and token check queued behind the one
+	// read-write connection.
+	search *sql.DB
+	Now    func() time.Time
 	// BlobMu serializes "blob exists? → insert row" in uploads against
 	// "unreferenced? → delete blob" in GC, so GC never deletes a blob that a
 	// concurrent upload is about to reference.
@@ -54,16 +59,30 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1) // SQLite: serialize writers, avoid SQLITE_BUSY
-	s := &Store{db: db, Now: time.Now}
+	s := &Store{db: db, search: db, Now: time.Now}
 	if err := s.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
+	}
+	if path != ":memory:" && !strings.HasPrefix(path, "file:") {
+		ro, err := sql.Open("sqlite", "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)&_pragma=query_only(1)")
+		if err != nil {
+			db.Close()
+			return nil, err
+		}
+		ro.SetMaxOpenConns(2)
+		s.search = ro
 	}
 	return s, nil
 }
 
 // Close closes the database.
-func (s *Store) Close() error { return s.db.Close() }
+func (s *Store) Close() error {
+	if s.search != s.db {
+		s.search.Close()
+	}
+	return s.db.Close()
+}
 
 // DB exposes the handle for tests.
 func (s *Store) DB() *sql.DB { return s.db }

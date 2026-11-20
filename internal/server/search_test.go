@@ -213,3 +213,17 @@ func TestSearchSnippetCaseLengthChange(t *testing.T) {
 		}
 	}
 }
+
+// Long words cost many trigram lookups; they are refused (security review).
+func TestSearchTermLength(t *testing.T) {
+	e := testutil.New(t, nil)
+	tok := e.Token("t")
+	up(t, e, tok, "", []byte(strings.Repeat("a", 64)))
+	code, b := api(t, e, tok, "GET", "/api/v1/search?q="+strings.Repeat("a", 65), nil)
+	if code != 400 || !strings.Contains(string(b), "limited to 64 characters") {
+		t.Fatalf("65-character word: %d %s", code, b)
+	}
+	if code, b := api(t, e, tok, "GET", "/api/v1/search?q="+strings.Repeat("a", 64), nil); code != 200 {
+		t.Fatalf("64-character word: %d %s", code, b)
+	}
+}

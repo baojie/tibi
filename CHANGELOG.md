@@ -31,13 +31,17 @@ end-to-end encryption (A9); see `docs/SECURITY.md`.
   `Retry-After`), as PLAN A8.7 always specified.
 - Image decompression bombs: thumbnails are limited by estimated decoded
   bytes (a 16-bit 9999×9999 PNG decoded to 800 MB; progressive JPEGs are
-  counted with their coefficients) and made one at a time; HEIC
+  recognised and counted with their coefficients) and made one at a time; HEIC
   converters get the input format named explicitly, memory limits, and
   run two at a time.
 - Multipart uploads: at most 100 files and 50 fields per request (20 000
   parts held 40 000 file descriptors open).
 - Search no longer crashes on pastes with characters whose lower case is
   longer in UTF-8 (Ⱥ); the case-insensitive snippet match is linear.
+- Search cannot stall the server: it runs on separate read-only database
+  connections (two at a time), words are limited to 64 characters, and a
+  query is interrupted after 5 seconds (a long word over large repetitive
+  pastes held the single connection, and every page view, for 15 s).
 - Expiries are capped at 100 years (`1e300d` overflowed into the past).
 - Hotlink protection covers `/dl` of media.
 - `/metrics` needs an admin token unless `metrics_allow_local` is set (a

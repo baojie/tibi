@@ -217,7 +217,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Private: privateAccess(r),
 	})
 	switch {
-	case errors.Is(err, store.ErrBadQuery), errors.Is(err, store.ErrBadCursor):
+	case errors.Is(err, store.ErrBadQuery), errors.Is(err, store.ErrBadCursor),
+		errors.Is(err, store.ErrTermTooLong), errors.Is(err, store.ErrSearchTimeout):
 		apiError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case err != nil && strings.Contains(err.Error(), "too many"):

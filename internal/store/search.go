@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -129,8 +131,21 @@ type SearchFilter struct {
 // ErrBadQuery is returned for empty or unusable queries.
 var ErrBadQuery = errors.New("query must contain at least one word")
 
-// maxTerms bounds the work one query can cause.
-const maxTerms = 8
+// maxTerms, maxTermRunes and SearchTimeout bound the work one query can
+// cause: a long word becomes many trigrams, each matching everywhere in a
+// large repetitive paste (a 451-character word over 10 MB took 15 s).
+const (
+	maxTerms      = 8
+	maxTermRunes  = 64
+	SearchTimeout = 5 * time.Second
+)
+
+// ErrTermTooLong and ErrSearchTimeout are returned for queries that would
+// cost too much.
+var (
+	ErrTermTooLong   = fmt.Errorf("search words are limited to %d characters", maxTermRunes)
+	ErrSearchTimeout = errors.New("search took too long; use more specific words")
+)
 
 // quoteFTS makes s a literal FTS5 string.
 func quoteFTS(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
@@ -164,6 +179,9 @@ func termClauses(q string) ([]string, []any, error) {
 		}
 		for _, p := range parts {
 			rs := []rune(p)
+			if len(rs) > maxTermRunes {
+				return nil, nil, ErrTermTooLong
+			}
 			switch {
 			case isCJK(rs[0]) && len(rs) == 1:
 				add("items_fts", "cjk : "+quoteFTS(p)+" *")
@@ -235,8 +253,13 @@ func (s *Store) Search(ctx context.Context, f SearchFilter) ([]SearchHit, string
 	}
 	q += ` ORDER BY i.created_at DESC, i.rowid DESC LIMIT ?`
 	all = append(all, f.Limit+1)
-	rows, err := s.db.QueryContext(ctx, q, all...)
+	ctx, cancel := context.WithTimeout(ctx, SearchTimeout) // interrupts SQLite
+	defer cancel()
+	rows, err := s.search.QueryContext(ctx, q, all...)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, "", ErrSearchTimeout
+		}
 		return nil, "", err
 	}
 	defer rows.Close()
@@ -252,6 +275,9 @@ func (s *Store) Search(ctx context.Context, f SearchFilter) ([]SearchHit, string
 		hits = append(hits, SearchHit{Item: it, Snippet: snippet(body, f.Query)})
 	}
 	if err := rows.Err(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, "", ErrSearchTimeout
+		}
 		return nil, "", err
 	}
 	next := ""
