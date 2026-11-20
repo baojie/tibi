@@ -51,6 +51,9 @@ type Item struct {
 	Thumb         bool // a thumbnail blob exists
 	Visibility    string
 	Slug          string
+	CollectionID  string
+	Position      *int
+	ForkedFrom    string
 	BurnAfterRead bool
 	Source        string
 	Meta          string
@@ -99,6 +102,12 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 	for attempt := 0; ; attempt++ {
 		it.ID = id.New()
 		err := s.tx(ctx, func(tx *sql.Tx) error {
+			if taken, err := idTaken(ctx, tx, it.ID); err != nil || taken {
+				if err == nil {
+					err = errIDTaken
+				}
+				return err
+			}
 			if it.Slug != "" {
 				if _, err := tx.ExecContext(ctx, `UPDATE items SET slug = NULL WHERE slug = ?`, it.Slug); err != nil {
 					return err
@@ -106,13 +115,14 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 			}
 			res, err := tx.ExecContext(ctx, `INSERT INTO items
 				(id, kind, mime, orig_mime, filename, ext, size, sha256, title, lang, charset, width, height,
-				 duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, created_at, expires_at)
-				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				 duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, created_at, expires_at,
+				 collection_id, position, forked_from)
+				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 				it.ID, it.Kind, it.Mime, nullStr(it.OrigMime), nullStr(it.Filename), it.Ext, it.Size, it.SHA256, nullStr(it.Title),
 				nullStr(it.Lang), nullStr(it.Charset), nullInt(it.Width), nullInt(it.Height),
 				nullInt64(it.DurationMS), it.Thumb, it.Visibility,
 				nullStr(it.Slug), it.BurnAfterRead, nullStr(it.Source), nullStr(it.Meta), it.TokenID,
-				it.CreatedAt, nullInt64(it.ExpiresAt))
+				it.CreatedAt, nullInt64(it.ExpiresAt), nullStr(it.CollectionID), nullInt(it.Position), nullStr(it.ForkedFrom))
 			if err != nil {
 				return err
 			}
@@ -127,11 +137,21 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 			}
 			return indexItem(ctx, tx, rowid, it.Title, it.Filename, body)
 		})
-		if err != nil && strings.Contains(err.Error(), "UNIQUE") && strings.Contains(err.Error(), "items.id") && attempt < 5 {
+		if err != nil && (errors.Is(err, errIDTaken) || strings.Contains(err.Error(), "UNIQUE") && strings.Contains(err.Error(), "items.id")) && attempt < 5 {
 			continue
 		}
 		return err
 	}
+}
+
+var errIDTaken = errors.New("id taken")
+
+// idTaken reports whether an item or a collection already uses id: both
+// live in one namespace, so no ID is ever both.
+func idTaken(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
+	var n int
+	err := tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM items WHERE id = ?) + (SELECT COUNT(*) FROM collections WHERE id = ?)`, id, id).Scan(&n)
+	return n > 0, err
 }
 
 func (s *Store) tx(ctx context.Context, fn func(*sql.Tx) error) error {
@@ -147,21 +167,27 @@ func (s *Store) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 }
 
 const itemCols = `id, kind, mime, orig_mime, filename, ext, size, sha256, title, lang, charset, width, height,
-	duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, view_count, created_at, expires_at, deleted_at`
+	duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, view_count, created_at, expires_at, deleted_at,
+	collection_id, position, forked_from`
 
 func scanItem(sc interface{ Scan(...any) error }) (*Item, error) {
 	var it Item
-	var origMime, filename, title, lang, charset, slug, source, meta sql.NullString
-	var width, height, dur, exp, del sql.NullInt64
+	var origMime, filename, title, lang, charset, slug, source, meta, coll, forked sql.NullString
+	var width, height, dur, exp, del, pos sql.NullInt64
 	err := sc.Scan(&it.ID, &it.Kind, &it.Mime, &origMime, &filename, &it.Ext, &it.Size, &it.SHA256, &title,
 		&lang, &charset, &width, &height, &dur, &it.Thumb, &it.Visibility, &slug, &it.BurnAfterRead, &source, &meta,
-		&it.TokenID, &it.ViewCount, &it.CreatedAt, &exp, &del)
+		&it.TokenID, &it.ViewCount, &it.CreatedAt, &exp, &del, &coll, &pos, &forked)
 	if err != nil {
 		return nil, err
 	}
 	it.Filename, it.Title, it.Lang, it.Charset = filename.String, title.String, lang.String, charset.String
 	it.Slug, it.Source, it.Meta = slug.String, source.String, meta.String
 	it.OrigMime = origMime.String
+	it.CollectionID, it.ForkedFrom = coll.String, forked.String
+	if pos.Valid {
+		p := int(pos.Int64)
+		it.Position = &p
+	}
 	if dur.Valid {
 		it.DurationMS = &dur.Int64
 	}
@@ -208,10 +234,11 @@ func (s *Store) ResolveSlug(ctx context.Context, slug string) (*Item, error) {
 
 // ListFilter selects items for ListItems.
 type ListFilter struct {
-	Kind   string
-	Source string
-	Limit  int
-	Cursor string // opaque, from a previous page
+	Kind       string
+	Source     string
+	Collection string
+	Limit      int
+	Cursor     string // opaque, from a previous page
 }
 
 // ErrBadCursor is returned for malformed cursors.
@@ -250,6 +277,10 @@ func (s *Store) ListItems(ctx context.Context, f ListFilter) ([]*Item, string, e
 	if f.Source != "" {
 		q += ` AND source = ?`
 		args = append(args, f.Source)
+	}
+	if f.Collection != "" {
+		q += ` AND collection_id = ?`
+		args = append(args, f.Collection)
 	}
 	if f.Cursor != "" {
 		ts, seq, err := decodeCursor(f.Cursor)

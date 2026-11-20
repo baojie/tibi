@@ -56,6 +56,14 @@ func (s *Store) Purge(ctx context.Context) (PurgeResult, error) {
 			}
 		}
 		res.Items = len(ids)
+		// Collections: purge expired ones and those deleted over a day ago,
+		// once no rows refer to them any more.
+		if _, err := tx.ExecContext(ctx, `DELETE FROM collections
+			WHERE ((expires_at IS NOT NULL AND expires_at <= ?) OR (deleted_at IS NOT NULL AND deleted_at <= ?))
+			AND NOT EXISTS (SELECT 1 FROM items WHERE items.collection_id = collections.id)`,
+			now, now-DeletedRetention); err != nil {
+			return err
+		}
 		for sha := range hashes {
 			var n int
 			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM items WHERE sha256 = ?`, sha).Scan(&n); err != nil {
