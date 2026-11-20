@@ -19,7 +19,8 @@
     <span class="spacer"></span>
     <button type="button" class="button secondary" id="wrap-toggle" aria-pressed="false">Wrap</button>
     {{if not .Burned}}
-    <button type="button" class="button secondary" data-copy-url="{{.RawURL}}">Copy</button>
+    <button type="button" class="button secondary" data-copy-url="{{.LocalRaw}}">Copy</button>
+    <button type="button" class="button secondary" id="fork-button" hidden data-raw="{{.LocalRaw}}" data-fork="/api/v1/items/{{.Item.ID}}/fork">Fork</button>
     <a class="button secondary" href="{{.RawURL}}" rel="nofollow">Raw</a>
     <a class="button secondary" href="{{.DownloadURL}}">Download</a>
     {{end}}
@@ -28,6 +29,11 @@
   {{if .Text.Truncated}}
   <p class="notice">This text is {{.Size}}; showing the first {{.Text.ShownSize}} ({{.Text.Lines}} lines). <a href="{{.RawURL}}" rel="nofollow">View the full raw text</a>.</p>
   {{end}}
+  <form class="fork-editor" id="fork-editor" hidden>
+    <p class="notice muted">Content is immutable: saving creates a new item that links back to this one.</p>
+    <textarea name="text" spellcheck="false" aria-label="New version"></textarea>
+    <p class="actions"><button type="submit" class="button">Save as new version</button> <button type="button" class="button secondary" id="fork-cancel">Cancel</button> <span id="fork-status"></span></p>
+  </form>
   {{if .Text.IsMarkdown}}
   <article class="markdown" id="view-rendered">{{.Text.Rendered}}</article>
   <div id="view-source" hidden>{{.Text.Code}}</div>

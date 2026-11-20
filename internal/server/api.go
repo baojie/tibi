@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tibi/internal/id"
 	"tibi/internal/ingest"
 	"tibi/internal/store"
 	"tibi/internal/units"
@@ -176,17 +177,24 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit+1)
-	o, err := s.uploadOptions(r, func(k string) string { return opt(r, k) })
+	get := func(k string) string { return opt(r, k) }
+	o, err := s.uploadOptions(r, get)
 	if err != nil {
 		s.ingestError(w, err)
 		return
 	}
-	it, err := s.ingest.Ingest(r.Context(), r.Body, o)
+	cp, err := s.collectionParam(get, o)
 	if err != nil {
 		s.ingestError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, s.itemJSON(it))
+	p, err := s.ingest.Prepare(r.Context(), r.Body, o)
+	if err != nil {
+		s.ingestError(w, err)
+		return
+	}
+	defer p.Close()
+	s.finishUpload(w, r, []*ingest.Prepared{p}, o, cp)
 }
 
 // multipartOverhead allows for part headers and form fields on top of the
@@ -285,6 +293,11 @@ func (s *Server) handleMultipart(w http.ResponseWriter, r *http.Request, boundar
 		apiError(w, http.StatusBadRequest, "bad_request", "slug can only be set when uploading a single file")
 		return
 	}
+	cp, err := s.collectionParam(get, base)
+	if err != nil {
+		s.ingestError(w, err)
+		return
+	}
 	for _, sf := range files {
 		o := base
 		if sf.name != "" {
@@ -301,19 +314,86 @@ func (s *Server) handleMultipart(w http.ResponseWriter, r *http.Request, boundar
 		}
 		prepared = append(prepared, p)
 	}
+	s.finishUpload(w, r, prepared, base, cp)
+}
+
+// collectionTarget says where uploads go: nowhere, a new collection, or
+// the end of an existing one.
+type collectionTarget struct {
+	id    string // "" none, "new", or an existing collection ID
+	title string
+}
+
+func (s *Server) collectionParam(get func(string) string, o ingest.Options) (collectionTarget, error) {
+	ct := collectionTarget{id: get("collection"), title: get("collection_title")}
+	if ct.id == "" {
+		return ct, nil
+	}
+	if o.Burn {
+		return ct, &ingest.BadRequestError{Msg: "burn_after_read cannot be combined with a collection"}
+	}
+	if ct.id != "new" && !id.Valid(ct.id) {
+		return ct, &ingest.BadRequestError{Msg: `collection must be "new" or a collection ID`}
+	}
+	return ct, nil
+}
+
+// finishUpload commits prepared uploads, into a collection if requested,
+// and writes the response: an Item, an array of Items, or — with a
+// collection — {"collection": …, "items": […]}.
+func (s *Server) finishUpload(w http.ResponseWriter, r *http.Request, prepared []*ingest.Prepared, o ingest.Options, ct collectionTarget) {
+	ctx := r.Context()
+	var coll *store.Collection
+	pos := 0
+	switch ct.id {
+	case "":
+	case "new":
+		coll = &store.Collection{Title: ct.title, Visibility: o.Visibility, TokenID: o.TokenID, ExpiresAt: o.ExpiresAt}
+		if err := s.store.CreateCollection(ctx, coll); err != nil {
+			s.ingestError(w, err)
+			return
+		}
+	default:
+		c, err := s.store.GetCollection(ctx, ct.id)
+		if errors.Is(err, store.ErrNotFound) {
+			apiError(w, http.StatusBadRequest, "bad_request", "no such collection "+ct.id)
+			return
+		}
+		if err != nil {
+			s.ingestError(w, err)
+			return
+		}
+		coll = c
+		if pos, err = s.store.NextPosition(ctx, c.ID); err != nil {
+			s.ingestError(w, err)
+			return
+		}
+	}
 	out := make([]ItemJSON, 0, len(prepared))
-	for _, p := range prepared {
-		if err := s.ingest.Commit(r.Context(), p); err != nil {
+	for i, p := range prepared {
+		if coll != nil {
+			n := pos + i
+			p.Item.CollectionID, p.Item.Position = coll.ID, &n
+		}
+		if err := s.ingest.Commit(ctx, p); err != nil {
 			s.ingestError(w, err)
 			return
 		}
 		out = append(out, s.itemJSON(p.Item))
 	}
-	if len(out) == 1 {
+	switch {
+	case coll != nil:
+		c, err := s.store.GetCollection(ctx, coll.ID) // fresh item count
+		if err != nil {
+			s.ingestError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"collection": s.collectionJSON(c), "items": out})
+	case len(out) == 1:
 		writeJSON(w, http.StatusCreated, out[0])
-		return
+	default:
+		writeJSON(w, http.StatusCreated, out)
 	}
-	writeJSON(w, http.StatusCreated, out)
 }
 
 // ItemJSON is the API representation of an item.
@@ -338,6 +418,10 @@ type ItemJSON struct {
 	Visibility    string `json:"visibility"`
 	Slug          string `json:"slug,omitempty"`
 	SlugURL       string `json:"slug_url,omitempty"`
+	CollectionID  string `json:"collection_id,omitempty"`
+	CollectionURL string `json:"collection_url,omitempty"`
+	Position      *int   `json:"position,omitempty"`
+	ForkedFrom    string `json:"forked_from,omitempty"`
 	BurnAfterRead bool   `json:"burn_after_read"`
 	Source        string `json:"source,omitempty"`
 	ViewCount     int64  `json:"view_count"`
@@ -372,6 +456,10 @@ func (s *Server) itemJSON(it *store.Item) ItemJSON {
 		j.SlugURL = s.cfg.BaseURL + "/s/" + it.Slug
 	}
 	j.DurationMS, j.OrigMime = it.DurationMS, it.OrigMime
+	j.ForkedFrom, j.Position = it.ForkedFrom, it.Position
+	if it.CollectionID != "" {
+		j.CollectionID, j.CollectionURL = it.CollectionID, s.cfg.BaseURL+"/c/"+it.CollectionID
+	}
 	if it.Thumb {
 		j.ThumbnailURL = s.cfg.RawBase() + "/" + it.ID + "/thumb"
 	}

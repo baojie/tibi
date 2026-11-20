@@ -2,7 +2,6 @@
 // toggle, copy-all and the Markdown rendered/source tabs. No inline scripts.
 (function () {
   "use strict";
-  var code = document.getElementById("code");
 
   function store(k, v) {
     try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; }
@@ -25,43 +24,41 @@
     t.addEventListener("click", function () { show(t.getAttribute("data-view")); });
   });
 
-  // --- Line selection ---
-  var anchor = null;
+  // --- Line selection: #L12, #L12-L20, and #f2-L5-L8 in collections ---
+  var anchor = null; // {prefix, line}
   function parse(hash) {
-    var m = /^#L(\d+)(?:-L(\d+))?$/.exec(hash || "");
+    var m = /^#((?:f\d+-)?)L(\d+)(?:-L(\d+))?$/.exec(hash || "");
     if (!m) return null;
-    var a = +m[1], b = m[2] ? +m[2] : a;
-    return a <= b ? [a, b] : [b, a];
+    var a = +m[2], b = m[3] ? +m[3] : a;
+    return { prefix: m[1], from: Math.min(a, b), to: Math.max(a, b) };
   }
   function mark() {
-    if (!code) return;
-    code.querySelectorAll(".hl").forEach(function (el) { el.classList.remove("hl"); });
+    document.querySelectorAll(".code .hl").forEach(function (el) { el.classList.remove("hl"); });
     var r = parse(location.hash);
     if (!r) return;
-    if (tabs.length) show("source");
-    for (var i = r[0]; i <= r[1]; i++) {
-      var el = document.getElementById("L" + i);
+    if (tabs.length && !r.prefix) show("source");
+    for (var i = r.from; i <= r.to; i++) {
+      var el = document.getElementById(r.prefix + "L" + i);
       if (el) el.classList.add("hl");
     }
-    var first = document.getElementById("L" + r[0]);
+    var first = document.getElementById(r.prefix + "L" + r.from);
     if (first) first.scrollIntoView({ block: "center" });
-    anchor = r[0];
+    anchor = { prefix: r.prefix, line: r.from };
   }
-  if (code) {
-    code.addEventListener("click", function (e) {
-      var a = e.target.closest("a[href^='#L']");
-      if (!a) return;
-      var n = +a.getAttribute("href").slice(2);
-      if (e.shiftKey && anchor) {
-        e.preventDefault();
-        var lo = Math.min(anchor, n), hi = Math.max(anchor, n);
-        history.replaceState(null, "", "#L" + lo + "-L" + hi);
-        var keep = anchor;
-        mark();
-        anchor = keep;
-      }
-    });
-  }
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest(".code a[href^='#']");
+    if (!a) return;
+    var r = parse(a.getAttribute("href"));
+    if (!r) return;
+    if (e.shiftKey && anchor && anchor.prefix === r.prefix) {
+      e.preventDefault();
+      var lo = Math.min(anchor.line, r.from), hi = Math.max(anchor.line, r.from);
+      var keep = anchor;
+      history.replaceState(null, "", "#" + r.prefix + "L" + lo + "-L" + hi);
+      mark();
+      anchor = keep;
+    }
+  });
   window.addEventListener("hashchange", mark);
   mark();
 
@@ -91,5 +88,44 @@
         setTimeout(function () { b.textContent = old; }, 1200);
       });
     });
+  });
+})();
+
+// Fork: shown only when this browser holds an API token (saved by the web
+// upload page under "tibi.token"). Editing creates a new item via
+// POST /api/v1/items/{id}/fork; the original never changes.
+(function () {
+  "use strict";
+  var btn = document.getElementById("fork-button");
+  var form = document.getElementById("fork-editor");
+  if (!btn || !form) return;
+  var token = null;
+  try { token = localStorage.getItem("tibi.token"); } catch (e) {}
+  if (!token) return;
+  btn.hidden = false;
+  var status = document.getElementById("fork-status");
+  btn.addEventListener("click", function () {
+    fetch(btn.getAttribute("data-raw"), { headers: { Authorization: "Bearer " + token } })
+      .then(function (r) { return r.text(); })
+      .then(function (t) {
+        form.elements.text.value = t;
+        form.hidden = false;
+        form.elements.text.focus();
+      });
+  });
+  document.getElementById("fork-cancel").addEventListener("click", function () { form.hidden = true; });
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    status.textContent = "Saving…";
+    fetch(btn.getAttribute("data-fork"), {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "text/plain; charset=utf-8" },
+      body: form.elements.text.value
+    }).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error((j.error && j.error.message) || r.statusText);
+        location.href = j.url;
+      });
+    }).catch(function (err) { status.textContent = "Failed: " + err.message; });
   });
 })();

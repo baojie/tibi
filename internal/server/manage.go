@@ -25,12 +25,8 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	if q.Get("collection") != "" {
-		apiError(w, http.StatusBadRequest, "bad_request", "collections are not supported yet")
-		return
-	}
 	items, next, err := s.store.ListItems(r.Context(), store.ListFilter{
-		Kind: q.Get("kind"), Source: q.Get("source"), Limit: limit, Cursor: q.Get("cursor"),
+		Kind: q.Get("kind"), Source: q.Get("source"), Collection: q.Get("collection"), Limit: limit, Cursor: q.Get("cursor"),
 	})
 	if errors.Is(err, store.ErrBadCursor) {
 		apiError(w, http.StatusBadRequest, "bad_request", "invalid cursor")

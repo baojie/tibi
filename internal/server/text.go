@@ -28,8 +28,13 @@ type textView struct {
 // loadTextView renders a text item. Burned items are not cached, so their
 // content does not linger in memory.
 func (s *Server) loadTextView(ctx context.Context, it *store.Item, cache bool) (*textView, error) {
+	return s.loadTextBlock(ctx, it, cache, "")
+}
+
+// loadTextBlock renders a text item with line IDs prefixed by prefix.
+func (s *Server) loadTextBlock(ctx context.Context, it *store.Item, cache bool, prefix string) (*textView, error) {
 	limit := s.cfg.MaxTextBytes
-	key := it.SHA256 + "|" + it.Lang + "|" + strconv.FormatInt(limit, 10)
+	key := it.SHA256 + "|" + it.Lang + "|" + strconv.FormatInt(limit, 10) + "|" + prefix
 	if v, ok := s.renderCache.Get(key); ok && cache {
 		return v.(*textView), nil
 	}
@@ -51,7 +56,7 @@ func (s *Server) loadTextView(ctx context.Context, it *store.Item, cache bool) (
 		tv.Truncated = true
 		tv.ShownSize = units.FormatBytes(int64(len(data)))
 	}
-	tv.Code, tv.Lines = render.Code(string(data), it.Lang)
+	tv.Code, tv.Lines = render.CodeBlock(string(data), it.Lang, prefix)
 	if it.Lang == render.Markdown && !tv.Truncated {
 		if html, err := render.RenderMarkdown(data); err == nil {
 			tv.Rendered, tv.IsMarkdown = html, true
@@ -67,4 +72,18 @@ func (s *Server) handleChromaCSS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	w.Write(s.chromaCSS)
+}
+
+// markdownOf renders a Markdown item (for collection pages).
+func (s *Server) markdownOf(r *http.Request, it *store.Item) (template.HTML, error) {
+	f, err := s.blobs.Open(r.Context(), blob.Key(it.SHA256))
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, s.cfg.MaxTextBytes))
+	if err != nil {
+		return "", err
+	}
+	return render.RenderMarkdown(data)
 }

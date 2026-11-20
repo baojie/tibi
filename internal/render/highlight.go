@@ -21,6 +21,12 @@ const HighlightLimit = 256 << 10
 // counter so they are not part of copied text. It returns the HTML and the
 // line count.
 func Code(text, lang string) (template.HTML, int) {
+	return CodeBlock(text, lang, "")
+}
+
+// CodeBlock is Code with line IDs prefixed (e.g. "f2-" → id="f2-L5"), so
+// several blocks can share a page.
+func CodeBlock(text, lang, prefix string) (template.HTML, int) {
 	var lexer chroma.Lexer
 	if lang != PlainText && lang != "" && len(text) <= HighlightLimit {
 		lexer = lexers.Get(lang)
@@ -44,10 +50,14 @@ func Code(text, lang string) (template.HTML, int) {
 
 	var b bytes.Buffer
 	b.Grow(len(text) * 2)
-	b.WriteString(`<div class="code chroma" id="code">`)
+	if prefix == "" {
+		b.WriteString(`<div class="code chroma" id="code">`)
+	} else {
+		b.WriteString(`<div class="code chroma" data-prefix="` + template.HTMLEscapeString(prefix) + `">`)
+	}
 	for i, line := range lines {
-		n := strconv.Itoa(i + 1)
-		b.WriteString(`<div id="L` + n + `"><a href="#L` + n + `"></a><span>`)
+		n := prefix + "L" + strconv.Itoa(i+1)
+		b.WriteString(`<div id="` + n + `"><a href="#` + n + `"></a><span>`)
 		for _, t := range line {
 			v := strings.TrimSuffix(t.Value, "\n")
 			if v == "" {

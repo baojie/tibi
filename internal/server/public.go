@@ -41,6 +41,8 @@ func (s *Server) handleItemRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case len(parts) == 2 && parts[0] == "c":
+		s.handleCollectionPage(w, r, parts[1])
 	case len(parts) == 1:
 		s.handleItemOrRaw(w, r, parts[0])
 	case len(parts) == 2 && parts[1] == "raw":
@@ -366,6 +368,7 @@ type viewModel struct {
 	EmbedURL    template.URL
 	DownloadURL string
 	Markdown    string
+	LocalRaw    string // same-origin raw path, for scripts (copy, fork)
 	Text        *textView
 	Expires     string
 	Duration    string
@@ -390,6 +393,7 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 		Size:        units.FormatBytes(it.Size),
 		URL:         j.URL,
 		RawURL:      s.cfg.RawBase() + "/" + it.ID + "/raw",
+		LocalRaw:    "/" + it.ID + "/raw",
 		EmbedURL:    template.URL(j.RawURL),
 		DownloadURL: j.DownloadURL,
 		Markdown:    j.Markdown,

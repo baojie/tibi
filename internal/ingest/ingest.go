@@ -60,6 +60,7 @@ type Options struct {
 	Lang       string // language for text; inferred when empty
 	Slug       string
 	Burn       bool
+	ForkedFrom string
 	KeepMeta   bool
 	Source     string
 	Meta       string
@@ -214,6 +215,7 @@ func (p *Pipeline) Prepare(ctx context.Context, r io.Reader, o Options) (*Prepar
 		Kind:          cl.Kind,
 		Mime:          cl.Mime,
 		OrigMime:      origMime,
+		ForkedFrom:    o.ForkedFrom,
 		DurationMS:    durationMS,
 		Filename:      filename,
 		Size:          n,

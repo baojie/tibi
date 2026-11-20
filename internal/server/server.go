@@ -41,7 +41,7 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		log = slog.Default()
 	}
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"file", "image", "text", "burn", "video", "audio"} {
+	for _, name := range []string{"file", "image", "text", "burn", "video", "audio", "collection"} {
 		t, err := template.ParseFS(web.Templates, "templates/layout.html", "templates/"+name+".html")
 		if err != nil {
 			return nil, err
@@ -89,6 +89,12 @@ func (s *Server) routes() {
 	m.Handle("GET /api/v1/whoami", s.auth("", http.HandlerFunc(s.handleWhoami)))
 	m.Handle("POST /api/v1/items", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleUpload)))
 	m.Handle("GET /api/v1/items", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleList)))
+	m.Handle("POST /api/v1/items/{id}/fork", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleFork)))
+	m.Handle("POST /api/v1/collections", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleCreateCollection)))
+	m.Handle("GET /api/v1/collections", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleListCollections)))
+	m.Handle("GET /api/v1/collections/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleGetCollection)))
+	m.Handle("PATCH /api/v1/collections/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handlePatchCollection)))
+	m.Handle("DELETE /api/v1/collections/{id}", s.auth(store.ScopeDelete, http.HandlerFunc(s.handleDeleteCollection)))
 	m.Handle("GET /api/v1/search", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleSearch)))
 	m.Handle("GET /api/v1/items/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handleGetItem)))
 	m.Handle("PATCH /api/v1/items/{id}", s.auth(store.ScopeUpload, http.HandlerFunc(s.handlePatchItem)))
