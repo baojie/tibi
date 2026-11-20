@@ -25,15 +25,16 @@ window.tibi = (function () {
       });
     });
   }
-  function copyButton(text) {
+  function copyButton(text, label) {
     var b = document.createElement("button");
+    label = label || t("action.copy");
     b.type = "button";
     b.className = "button secondary";
-    b.textContent = t("action.copy");
+    b.textContent = label;
     b.addEventListener("click", function () {
       navigator.clipboard.writeText(text).then(function () {
         b.textContent = t("action.copied");
-        setTimeout(function () { b.textContent = t("action.copy"); }, 1200);
+        setTimeout(function () { b.textContent = label; }, 1200);
       });
     });
     return b;

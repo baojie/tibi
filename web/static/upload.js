@@ -78,7 +78,7 @@
       a.className = "result-link";
       li.appendChild(a);
       li.appendChild(T.copyButton(it.url));
-      if (it.kind === "image") li.appendChild(T.copyButton(it.markdown)).title = "Markdown";
+      if (it.kind === "image") li.appendChild(T.copyButton(it.markdown, "Markdown"));
       results.insertBefore(li, results.firstChild);
     });
   }

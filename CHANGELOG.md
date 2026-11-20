@@ -4,7 +4,21 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [Unreleased]
+
+### Added
+- A screenshot for every version, under its heading here and in the GitHub
+  release notes (`docs/screenshots/`, made by `scripts/screenshots/` from
+  real runs; `scripts/release-notes.sh`). A test fails when a version has
+  none.
+
+### Fixed
+- Upload page: the button that copies an image's Markdown was labelled
+  "Copy", like the one that copies its link; it now says "Markdown".
+
 ## [0.1.0] — Feature-complete release
+
+![A private item hidden from an upload-only token, a signed link opening it, and the per-token rate limit](docs/screenshots/v0.1.0.png)
 
 Everything PLAN.md set out to build, reviewed and hardened: image hosting
 and pastes, S3/Backblaze B2 storage, media and HEIC, search, collections,
@@ -84,6 +98,8 @@ end-to-end encryption (A9); see `docs/SECURITY.md`.
 
 ## [0.0.17] — ACDSeeN integration
 
+![ACDSeeN's context menu with Upload to tibi, and the collection link in its status bar](docs/screenshots/v0.0.17.png)
+
 PLAN's "adseen" turned out to be ACDSeeN, a desktop image viewer with no
 database, so the integration is an upload action rather than an asset
 pipeline: there are no records to store links back into.
@@ -98,6 +114,8 @@ pipeline: there are no records to store links back into.
 - `docs/CLIENTS.md`: ACDSeeN section.
 
 ## [0.0.16] — Android app
+
+![The Android share dialog showing the link of a shared photo](docs/screenshots/v0.0.16.png)
 
 ### Added
 - `android/`: share target for images, videos, text and any file
@@ -114,6 +132,8 @@ pipeline: there are no records to store links back into.
   twice), HEIC served as JPEG, the Quick Settings tile.
 
 ## [0.0.15] — Chrome extension
+
+![The Chrome extension's settings and its popup of recent uploads](docs/screenshots/v0.0.15.png)
 
 ### Added
 - `extensions/chrome/` (Manifest V3): right-click image → upload,
@@ -132,6 +152,8 @@ pipeline: there are no records to store links back into.
   back), a 21 MiB tus upload, popup and options.
 
 ## [0.0.14] — End-to-end encrypted pastes
+
+![An end-to-end encrypted paste decrypted in the browser after entering its password](docs/screenshots/v0.0.14.png)
 
 ### Added
 - `kind=encrypted` items: client-side AES-256-GCM, key in the URL fragment
@@ -160,6 +182,8 @@ pipeline: there are no records to store links back into.
 
 ## [0.0.13] — Resumable uploads
 
+![A 600 MiB upload interrupted, then resumed where it stopped](docs/screenshots/v0.0.13.png)
+
 ### Added
 - tus 1.0 resumable uploads at `/api/v1/uploads/` (tusd v2): options in
   `Upload-Metadata`, validated (and the quota checked) at creation; limit
@@ -178,6 +202,8 @@ pipeline: there are no records to store links back into.
 
 ## [0.0.12] — MCP server
 
+![tibi mcp listing its tools and answering a paste_text call](docs/screenshots/v0.0.12.png)
+
 ### Added
 - `tibi mcp`: a Model Context Protocol server on stdio (protocol versions
   2024-11-05, 2025-03-26 and 2025-06-18) using the CLI's login. Tools:
@@ -192,6 +218,8 @@ pipeline: there are no records to store links back into.
   clients. Verified with the official MCP TypeScript SDK client.
 
 ## [0.0.11] — Packaging and ecosystem
+
+![The Docker image converting an uploaded HEIC photo to JPEG](docs/screenshots/v0.0.11.png)
 
 ### Added
 - GoReleaser configuration: binaries for linux/amd64, linux/arm64,
@@ -214,6 +242,8 @@ pipeline: there are no records to store links back into.
   before every release build).
 
 ## [0.0.10] — Operations: cost control, metrics, export
+
+![A view page explaining that the item reached its daily bandwidth limit](docs/screenshots/v0.0.10.png)
 
 ### Added
 - Traffic counters: `view_count` (view pages and first-range raw hits) and
@@ -239,6 +269,8 @@ pipeline: there are no records to store links back into.
 - `docs/DEPLOY.md`: limits, monitoring, and backups with Litestream.
 
 ## [0.0.9] — Web experience
+
+![The upload page in Chinese after pasting a screenshot](docs/screenshots/v0.0.9.png)
 
 ### Added
 - `/upload`: the owner's upload page. Connect once with an API token (kept
@@ -270,6 +302,8 @@ pipeline: there are no records to store links back into.
 
 ## [0.0.8] — Collections and forks
 
+![A collection page with several images](docs/screenshots/v0.0.8.png)
+
 ### Added
 - Collections (albums and multi-file pastes) sharing the item ID namespace:
   `POST/GET /api/v1/collections`, `GET/PATCH/DELETE /api/v1/collections/{id}`
@@ -299,6 +333,8 @@ pipeline: there are no records to store links back into.
 
 ## [0.0.7] — Search and API contract
 
+![Searching by a Chinese substring, a code identifier and an English word](docs/screenshots/v0.0.7.png)
+
 ### Added
 - Full-text search over titles, filenames and text content (first 1 MiB):
   `GET /api/v1/search?q=…` and `tibi search`. Every word must match; words
@@ -316,6 +352,8 @@ pipeline: there are no records to store links back into.
   fails when it is out of date.
 
 ## [0.0.6] — Media: video, audio, HEIC, thumbnails
+
+![The video page with a seekable player](docs/screenshots/v0.0.6.png)
 
 ### Added
 - `video` (MP4, WebM, MOV) and `audio` (MP3, Ogg, Opus, M4A, WAV, FLAC) kinds
@@ -338,6 +376,8 @@ pipeline: there are no records to store links back into.
   `video/webm` and stored as files.
 
 ## [0.0.5] — Object storage: S3 / Backblaze B2
+
+![Blobs migrated to S3, images redirected to presigned URLs, Range requests](docs/screenshots/v0.0.5.png)
 
 ### Added
 - `s3` blob backend for any S3-compatible store (AWS S3, Backblaze B2,
@@ -365,6 +405,8 @@ pipeline: there are no records to store links back into.
   before its requested lifetime (a `1s` expiry could previously last ~0s).
 
 ## [0.0.4] — Item management and lifecycle
+
+![A burn-after-reading item waiting to be revealed](docs/screenshots/v0.0.4.png)
 
 ### Added
 - `GET /api/v1/items` (newest first, cursor pagination, `kind`/`source`
@@ -396,6 +438,8 @@ pipeline: there are no records to store links back into.
 
 ## [0.0.3] — Pastebin core
 
+![A Go paste with syntax highlighting](docs/screenshots/v0.0.3.png)
+
 ### Added
 - Text view page: server-side syntax highlighting (chroma) with line numbers,
   `#L12` and `#L12-L20` line links (shift-click selects a range), wrap
@@ -417,6 +461,8 @@ pipeline: there are no records to store links back into.
   `-l/--lang` on all upload commands.
 
 ## [0.0.2] — Image hosting core
+
+![An image page](docs/screenshots/v0.0.2.png)
 
 ### Added
 - Content sniffing and kind classification: PNG, JPEG, GIF, WebP and AVIF
@@ -443,6 +489,8 @@ pipeline: there are no records to store links back into.
   (a PNG named `shot.jpg` is served at `/{id}.png`).
 
 ## [0.0.1] — Walking skeleton
+
+![Uploading with tibi up and curl, and downloading the same bytes](docs/screenshots/v0.0.1.png)
 
 ### Added
 - Single `tibi` binary: `tibi serve`, `tibi admin`, and the client CLI.

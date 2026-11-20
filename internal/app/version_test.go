@@ -32,3 +32,32 @@ func TestAndroidVersion(t *testing.T) {
 		t.Fatalf("android versionName %q, want %q", m, Version)
 	}
 }
+
+// Every released version has a screenshot of what it added, shown under
+// its CHANGELOG heading (docs/screenshots/README.md), and the current
+// version has a CHANGELOG section.
+func TestChangelogScreenshots(t *testing.T) {
+	b, err := os.ReadFile("../../CHANGELOG.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := regexp.MustCompile(`(?m)^## \[([0-9.]+)\][^\n]*\n\n!\[[^\]]+\]\(([^)]+)\)$|^## \[([0-9.]+)\]`)
+	seen := map[string]bool{}
+	for _, m := range head.FindAllStringSubmatch(string(b), -1) {
+		if m[3] != "" {
+			t.Errorf("CHANGELOG.md: version %s has no screenshot right under its heading", m[3])
+			continue
+		}
+		v, img := m[1], m[2]
+		seen[v] = true
+		if want := "docs/screenshots/v" + v + ".png"; img != want {
+			t.Errorf("CHANGELOG.md: version %s shows %s, want %s", v, img, want)
+		}
+		if _, err := os.Stat("../../" + img); err != nil {
+			t.Errorf("CHANGELOG.md: version %s: %v", v, err)
+		}
+	}
+	if !seen[Version] {
+		t.Errorf("CHANGELOG.md has no section for the current version %s", Version)
+	}
+}
