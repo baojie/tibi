@@ -110,9 +110,18 @@ it=$(api /api/v1/items/$id1)
 [ "$(curl -sf "$(jq -r .raw_url <<<"$it" | local_url)" | sha)" = "$(sha < "$work/one.jpg")" ] || fail "photo bytes differ"
 notified() { for _ in $(seq 10); do $ADB shell dumpsys notification --noredact 2>/dev/null | grep -q "$1" && return; sleep 1; done; return 1; }
 notified "$u1" || fail "no notification with $u1"
+# The share dialog shows the link (for sharing it on the spot).
+for _ in $(seq 10); do shown=$(ui | grep 'tibi.android:id/url' | grep -oE ' text="[^"]*"' | cut -d'"' -f2); [ "$shown" = "$u1" ] && break; sleep 1; done
+[ "$shown" = "$u1" ] || fail "share dialog shows '$shown', want $u1"
+ui | grep 'tibi.android:id/share"' >/dev/null || fail "no Share button in the dialog"
 clip=$(clipboard)
 [ "$clip" = "$u1" ] || fail "clipboard: '$clip', want $u1"
-echo "OK: one photo → $u1 (in clipboard and notification)"
+# ...and the app's main screen lists it under recent links.
+$ADB shell am start -W -n $PKG/.SettingsActivity >/dev/null
+sleep 1
+ui | grep -v 'tibi.android:id/server' | grep -q "one.jpg&#10;$u1" || fail "recent links do not list $u1"
+$ADB shell am force-stop $PKG
+echo "OK: one photo → $u1 (shown in the dialog, in clipboard, notification and recent links)"
 
 # 2. Five photos → one collection.
 uris=()

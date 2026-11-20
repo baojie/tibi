@@ -64,9 +64,10 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
                 Log.i(TAG, "job $jobId: ${e.name} from $off of ${f.length()}")
                 api.patch(loc, f, off) { sent, _ ->
                     val now = System.currentTimeMillis()
-                    if (now - lastShown > 500) {
+                    if (now - lastShown > 300) {
                         lastShown = now
                         Notifications.update(ctx, jobId, before + sent, total)
+                        setProgressAsync(workDataOf("sent" to before + sent, "total" to total))
                     }
                 }
                 before += f.length()
@@ -82,16 +83,19 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             }
             val url = job.resultUrl!!
             Uploads.copy(ctx, url)
+            val label = if (job.entries.size > 1) ctx.getString(R.string.items, job.entries.size)
+            else job.entries[0].name.ifEmpty { job.entries[0].title ?: "text" }
+            settings.addRecent(url, label)
             Notifications.done(ctx, jobId, url, job.entries.size)
             Log.i(TAG, "job $jobId done: $url")
             job.delete()
-            Result.success(workDataOf("url" to url))
+            Result.success(workDataOf("url" to url, "count" to job.entries.size))
         } catch (e: ApiException) {
             Log.w(TAG, "job $jobId: ${e.status} ${e.message}")
             if (e.retryable && runAttemptCount < 8) return@withContext Result.retry()
             Notifications.failed(ctx, jobId, e.message ?: "HTTP ${e.status}")
             job.delete()
-            Result.failure()
+            Result.failure(workDataOf("error" to (e.message ?: "HTTP ${e.status}")))
         } catch (e: IOException) {
             // Network trouble: retry when connected (saved progress kept).
             Log.w(TAG, "job $jobId: ${e.javaClass.simpleName}: ${e.message}; will retry")

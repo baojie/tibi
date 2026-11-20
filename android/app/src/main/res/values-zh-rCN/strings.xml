@@ -23,4 +23,14 @@
     <string name="connect_failed">无法连接：%s</string>
     <string name="media_permission">允许访问截图（快捷设置磁贴需要）</string>
     <string name="howto">在任何应用里把照片、视频、文件或文字分享到“上传到 tibi”。上传完成后链接会被复制；多张照片会合成一个合集。</string>
+    <string name="open">打开</string>
+    <string name="hide">隐藏</string>
+    <string name="done_title">链接已复制</string>
+    <string name="done_title_collection">合集链接已复制</string>
+    <string name="background_note">可以隐藏此窗口，上传会在后台继续。</string>
+    <string name="recent">最近的链接</string>
+    <string name="no_recent">还没有上传过东西。</string>
+    <string name="preparing">正在准备…</string>
+    <string name="items">%d 项</string>
+    <string name="done">完成</string>
 </resources>

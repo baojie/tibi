@@ -97,8 +97,10 @@ the first time, or allow all sites once in its options.
 `android/` (Android 8+): share photos, videos, files or text from any app
 to **Upload to tibi**. The upload runs in the background (WorkManager +
 tus): it waits out a lost network or airplane mode and continues where it
-stopped. When it is done, the link is copied and a notification offers
-**Copy** and **Share**. Several items shared at once become one
+stopped. A small dialog shows the progress and then the link, with
+**Open**, **Copy** and **Share** (hide it any time; the upload continues);
+the link is also copied, a notification offers **Copy** and **Share**, and
+the app's main screen keeps a list of recent links. Several items shared at once become one
 collection. A Quick Settings tile, **Upload screenshot**, sends the newest
 screenshot. HEIC photos are converted by the server. Uploads carry
 `source=android`.

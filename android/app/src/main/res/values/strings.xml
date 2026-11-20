@@ -24,4 +24,14 @@
     <string name="connect_failed">Could not connect: %s</string>
     <string name="media_permission">Allow access to screenshots (for the Quick Settings tile)</string>
     <string name="howto">Share photos, videos, files or text from any app to “Upload to tibi”. The link is copied when the upload finishes; several photos become one collection.</string>
+    <string name="open">Open</string>
+    <string name="hide">Hide</string>
+    <string name="done_title">Link copied</string>
+    <string name="done_title_collection">Collection link copied</string>
+    <string name="background_note">You can hide this; the upload continues in the background.</string>
+    <string name="recent">Recent links</string>
+    <string name="no_recent">Nothing uploaded yet.</string>
+    <string name="preparing">Preparing…</string>
+    <string name="items">%d items</string>
+    <string name="done">Done</string>
 </resources>

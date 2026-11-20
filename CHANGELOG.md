@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [Unreleased]
+
+### Changed
+- Android: sharing opens a small dialog with the upload's progress and then
+  the link itself, with Open, Copy and Share — not just a toast and a
+  notification that is easy to miss. Hiding it does not stop the upload.
+  The main screen lists recent links (tap copies, Share sends).
+
 ## [0.0.17] — ACDSeeN integration
 
 PLAN's "adseen" turned out to be ACDSeeN, a desktop image viewer with no
