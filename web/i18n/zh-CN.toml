@@ -56,6 +56,7 @@
 "notice.private" = "私有：只有能读取私有条目的令牌或分享链接可以查看。"
 "notice.heic" = "HEIC 照片：多数浏览器无法显示此格式，因此提供下载。（本服务器未启用 HEIC 转换。）"
 "notice.file_download" = "%s 文件"
+"notice.over_cap" = "此条目今天的流量已达上限，文件暂时无法加载。UTC 零点（北京时间早上 8 点）后恢复。"
 
 "nav.upload" = "上传"
 "nav.recent" = "最近"

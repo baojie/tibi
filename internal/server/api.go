@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -13,6 +14,7 @@ import (
 
 	"tibi/internal/id"
 	"tibi/internal/ingest"
+	"tibi/internal/metrics"
 	"tibi/internal/store"
 	"tibi/internal/units"
 )
@@ -54,11 +56,32 @@ func (s *Server) auth(scope string, next http.Handler) http.Handler {
 
 func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 	t := tokenFrom(r.Context())
+	used, err := s.store.TokenUsage(r.Context(), t.ID)
+	if err != nil {
+		s.internal(w, "whoami", err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name":        t.Name,
 		"scopes":      t.Scopes,
 		"quota_bytes": t.QuotaBytes,
+		"used_bytes":  used,
 	})
+}
+
+// quotaError reports why adding n bytes would exceed the token's upload
+// quota (PLAN A8.7), or "" when it fits or there is no quota.
+func (s *Server) quotaError(r *http.Request, n int64) string {
+	t := tokenFrom(r.Context())
+	if t.QuotaBytes == nil {
+		return ""
+	}
+	used, err := s.store.TokenUsage(r.Context(), t.ID)
+	if err != nil || used+n <= *t.QuotaBytes {
+		return ""
+	}
+	return fmt.Sprintf("upload quota exceeded: %s of %s already used, this upload needs %s",
+		units.FormatBytes(used), units.FormatBytes(*t.QuotaBytes), units.FormatBytes(n))
 }
 
 // opt reads an upload option from the query string or an X-Tibi-* header.
@@ -174,6 +197,10 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.ContentLength > limit {
 		s.tooLarge(w)
+		return
+	}
+	if msg := s.quotaError(r, max(r.ContentLength, 0)); msg != "" && r.ContentLength > 0 {
+		apiError(w, http.StatusRequestEntityTooLarge, "too_large", msg) // before reading the body
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit+1)
@@ -343,6 +370,14 @@ func (s *Server) collectionParam(get func(string) string, o ingest.Options) (col
 // collection — {"collection": …, "items": […]}.
 func (s *Server) finishUpload(w http.ResponseWriter, r *http.Request, prepared []*ingest.Prepared, o ingest.Options, ct collectionTarget) {
 	ctx := r.Context()
+	var total int64
+	for _, p := range prepared {
+		total += p.Item.Size
+	}
+	if msg := s.quotaError(r, total); msg != "" {
+		apiError(w, http.StatusRequestEntityTooLarge, "too_large", msg)
+		return
+	}
 	var coll *store.Collection
 	pos := 0
 	switch ct.id {
@@ -379,6 +414,7 @@ func (s *Server) finishUpload(w http.ResponseWriter, r *http.Request, prepared [
 			s.ingestError(w, err)
 			return
 		}
+		metrics.UploadBytes.Add(p.Item.Size)
 		out = append(out, s.itemJSON(p.Item))
 	}
 	switch {

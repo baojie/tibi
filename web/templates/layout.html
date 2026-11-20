@@ -32,6 +32,7 @@
 </html>{{end}}
 
 {{define "notices"}}
+{{if .OverCap}}<p class="notice">{{t "notice.over_cap"}}</p>{{end}}
 {{if .Burned}}<p class="notice">{{t "notice.burned"}}</p>
 {{else if .Item.BurnAfterRead}}<p class="notice">{{t "notice.burn"}}</p>{{end}}
 {{with .Expires}}<p class="notice muted">{{t "notice.expires" .}}</p>{{end}}

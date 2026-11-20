@@ -57,6 +57,7 @@
 "notice.private" = "Private: visible only with a token that can read private items, or a share link."
 "notice.heic" = "HEIC photo: most browsers cannot display this format, so it is offered for download. (This server has no HEIC converter enabled.)"
 "notice.file_download" = "%s file"
+"notice.over_cap" = "This item has reached its bandwidth limit for today, so the file itself cannot be loaded right now. It will be available again after midnight UTC."
 
 "nav.upload" = "Upload"
 "nav.recent" = "Recent"

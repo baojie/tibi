@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"tibi/internal/id"
+	"tibi/internal/metrics"
 	"tibi/internal/store"
 )
 
@@ -282,9 +283,14 @@ func (s *Server) handleFork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer p.Close()
+	if msg := s.quotaError(r, p.Item.Size); msg != "" {
+		apiError(w, http.StatusRequestEntityTooLarge, "too_large", msg)
+		return
+	}
 	if err := s.ingest.Commit(r.Context(), p); err != nil {
 		s.ingestError(w, err)
 		return
 	}
+	metrics.UploadBytes.Add(p.Item.Size)
 	writeJSON(w, http.StatusCreated, s.itemJSON(p.Item))
 }

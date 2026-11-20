@@ -2,6 +2,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -16,9 +17,11 @@ import (
 	"tibi/internal/config"
 	"tibi/internal/i18n"
 	"tibi/internal/ingest"
+	"tibi/internal/metrics"
 	"tibi/internal/render"
 	"tibi/internal/sign"
 	"tibi/internal/store"
+	"tibi/internal/usage"
 	"tibi/web"
 )
 
@@ -34,6 +37,7 @@ type Server struct {
 	// renderCache holds rendered text views (content is immutable).
 	renderCache *render.Cache
 	signer      *sign.Signer
+	usage       *usage.Tracker
 	chromaCSS   []byte
 	log         *slog.Logger
 	mux         *http.ServeMux
@@ -77,6 +81,10 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 	if err != nil {
 		return nil, err
 	}
+	tracker := usage.New(st)
+	if err := tracker.Load(context.Background()); err != nil {
+		return nil, err
+	}
 	s := &Server{
 		cfg:   cfg,
 		store: st,
@@ -87,6 +95,7 @@ func New(cfg config.Server, st *store.Store, bs blob.Store, tempDir string, log 
 		renderCache: render.NewCache(64 << 20),
 		chromaCSS:   render.CSS(),
 		signer:      signer,
+		usage:       tracker,
 		pages:       pages,
 		i18n:        cat,
 		log:         log,
@@ -100,6 +109,8 @@ func (s *Server) routes() {
 	static, _ := fs.Sub(web.Static, "static")
 	m := s.mux
 	m.HandleFunc("GET /healthz", s.handleHealthz)
+	m.HandleFunc("GET /metrics", s.handleMetrics)
+	m.Handle("GET /api/v1/stats", s.auth(store.ScopeAdmin, http.HandlerFunc(s.handleStats)))
 	m.HandleFunc("GET /robots.txt", s.handleRobots)
 	m.HandleFunc("GET /static/chroma.css", s.handleChromaCSS)
 	m.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
@@ -141,6 +152,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("Referrer-Policy", "no-referrer")
 	sw := &statusWriter{ResponseWriter: w, status: 200}
 	s.mux.ServeHTTP(sw, r)
+	metrics.Request(r.Method, sw.status)
 	s.log.Info("http", "method", r.Method, "path", r.URL.Path, "status", sw.status,
 		"bytes", sw.n, "dur_ms", time.Since(start).Milliseconds())
 }

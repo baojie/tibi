@@ -15,6 +15,7 @@ import (
 	"tibi/internal/disposition"
 	"tibi/internal/id"
 	"tibi/internal/ingest"
+	"tibi/internal/metrics"
 	"tibi/internal/store"
 	"tibi/internal/units"
 )
@@ -108,12 +109,18 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request, itemID stri
 		s.fail(w, err)
 		return
 	}
+	if s.hotlinkBlocked(w, r, it) || s.overCap(w, it) {
+		return
+	}
 	f, err := s.blobs.Open(r.Context(), blob.ThumbKey(it.SHA256, ingest.ThumbWidth))
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
 	defer f.Close()
+	cw := &countingWriter{ResponseWriter: w}
+	defer func() { s.usage.Add(it.ID, cw.n, false); metrics.ServedBytes.Add(cw.n) }()
+	w = cw
 	h := w.Header()
 	h.Set("Content-Type", "image/webp")
 	h.Set("Content-Security-Policy", rawCSP)
@@ -128,6 +135,9 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request, itemID stri
 func (s *Server) serveRaw(w http.ResponseWriter, r *http.Request, it *store.Item, acc access, download bool) {
 	if it.BurnAfterRead && !acc.privileged {
 		notFound(w)
+		return
+	}
+	if (!download && s.hotlinkBlocked(w, r, it)) || s.overCap(w, it) {
 		return
 	}
 	s.serveBlob(w, r, it, download)
@@ -269,8 +279,16 @@ func RawContentType(mt string) string {
 
 func (s *Server) serveBlob(w http.ResponseWriter, r *http.Request, it *store.Item, download bool) {
 	if s.cfg.BlobDelivery == "redirect" && redirectable(it, download) && s.redirectBlob(w, r, it, download) {
+		// The object store sends the bytes (and bills the egress): count
+		// the whole object once per hit.
+		if countHit(r) {
+			s.usage.Add(it.ID, it.Size, true)
+		}
 		return
 	}
+	cw := &countingWriter{ResponseWriter: w}
+	defer func() { s.usage.Add(it.ID, cw.n, countHit(r)); metrics.ServedBytes.Add(cw.n) }()
+	w = cw
 	f, err := s.blobs.Open(r.Context(), blob.Key(it.SHA256))
 	if err != nil {
 		s.fail(w, err)
@@ -379,6 +397,7 @@ type viewModel struct {
 	Text        *textView
 	Expires     string
 	Duration    string
+	OverCap     bool // today's bandwidth allowance is used up
 	// Burned is set when a burn-after-read item is shown on reveal: it is
 	// already deleted, so no raw/download links are offered.
 	Burned bool
@@ -463,6 +482,12 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 	}
 	if it.DurationMS != nil {
 		vm.Duration = formatDuration(*it.DurationMS)
+	}
+	if !o.burned { // a burn's view is counted when it is consumed
+		s.usage.Add(it.ID, 0, true)
+	}
+	if itemOver, totalOver := s.usage.Over(it.ID, s.cfg.MaxItemBytesDay, s.cfg.MaxTotalBytesDay); itemOver || totalOver {
+		vm.OverCap = true
 	}
 	if q := o.signQuery; q != "" {
 		vm.RawURL += "?" + q
