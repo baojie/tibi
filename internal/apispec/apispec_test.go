@@ -66,8 +66,9 @@ func TestValidatorCatchesDivergence(t *testing.T) {
 func TestOperations(t *testing.T) {
 	ops := load(t).Operations()
 	// healthz, openapi, whoami, upload, list, get, patch, delete, fork,
-	// share-link, search, metrics, stats, and five collection operations
-	if len(ops) != 18 {
+	// share-link, search, metrics, stats, five collection operations, and
+	// five resumable-upload operations
+	if len(ops) != 23 {
 		t.Errorf("documented operations = %d", len(ops))
 	}
 }

@@ -22,6 +22,10 @@ tibi up --album *.jpg          # one collection
 tibi ls · tibi search WORDS · tibi rm ID · tibi share ID --ttl 1d
 ```
 
+Files over 20 MiB go up in resumable chunks with a progress line. If the
+upload is interrupted (network, Ctrl-C, laptop lid), run the same command
+again: it continues where it stopped instead of starting over.
+
 `tibi help` lists everything. Common flags: `-e 7d` expiry, `-p` private,
 `--burn`, `--md` (print Markdown), `--raw` (print the direct URL).
 
@@ -39,6 +43,12 @@ curl -H "Authorization: Bearer $TOKEN" -F file=@a.png -F file=@b.png \
 
 The response is JSON: `url` (page), `raw_url` (direct link to embed),
 `markdown`, `download_url`. The full API is in `docs/API.md`.
+
+For big files or flaky networks use the resumable endpoint
+`/api/v1/uploads/` with any [tus](https://tus.io/implementations) client
+(`tus-js-client`, `tus-android-client`, `tuspy`, …): send the token as
+`Authorization: Bearer …` and options as `Upload-Metadata` (`filename`,
+`title`, `expires`, …).
 
 ## Web page
 

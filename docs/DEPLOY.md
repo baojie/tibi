@@ -35,7 +35,13 @@ Release builds (once published) provide:
   builds the same image from source.
 
 Put a reverse proxy with TLS in front (Caddy, nginx); with nginx raise
-`client_max_body_size` to at least `max_upload_bytes`.
+`client_max_body_size` to at least `max_upload_bytes` (resumable uploads
+send 16 MiB chunks, so that also covers them).
+
+**Large files** use resumable uploads (tus) at `/api/v1/uploads/`, up to
+`max_resumable_bytes` (default 2 GiB). Partial uploads live in
+`data_dir/uploads` (same filesystem as `data_dir/tmp`, so finished files are
+moved, not copied) and are removed after 24 hours if never finished.
 
 ## Configuration
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.0.12
+  version: 0.0.13
   description: |
     tibi (题壁) is a self-hosted image host and pastebin: upload an image, a
     text or code snippet, or any file, and get back a URL to share.
@@ -46,6 +46,8 @@ tags:
     description: Upload, list, inspect, change and delete items.
   - name: collections
     description: Albums and multi-file pastes.
+  - name: uploads
+    description: Resumable uploads (tus) for large files and unreliable networks.
   - name: search
   - name: meta
     description: Server and token information.
@@ -468,6 +470,82 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/uploads/:
+    post:
+      tags: [uploads]
+      summary: Start a resumable upload (tus)
+      operationId: tusCreate
+      description: |
+        [tus 1.0](https://tus.io/protocols/resumable-upload) creation.
+        Send `Tus-Resumable: 1.0.0`, `Upload-Length` (required) and
+        `Upload-Metadata` with the upload options as base64 values
+        (`filename`, `title`, `expires`, `visibility`, `lang`, `kind`,
+        `keep_meta`, `slug`, `burn_after_read`, `source`, `meta`). The
+        `Location` header is the upload URL. Limit: `max_resumable_bytes`
+        (default 2 GiB). Uploads not finished within 24 hours are discarded.
+        Requires scope `upload`. Protocol errors (400, 413) are tus-style
+        plain text.
+      responses:
+        "201": { description: Created; see the Location header. }
+        "400": { description: Bad Upload-Length or metadata (text/plain). }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { description: Larger than max_resumable_bytes or the token's quota (text/plain). }
+  /api/v1/uploads/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    head:
+      tags: [uploads]
+      summary: Upload progress (tus)
+      operationId: tusHead
+      description: "`Upload-Offset` tells how many bytes the server has. Only the token that created the upload (or an admin) can see it."
+      responses:
+        "200": { description: See Upload-Offset and Upload-Length. }
+        "404": { description: No such upload. }
+    patch:
+      tags: [uploads]
+      summary: Send bytes (tus)
+      operationId: tusPatch
+      description: |
+        Body: the bytes starting at `Upload-Offset`
+        (`Content-Type: application/offset+octet-stream`). The PATCH that
+        completes the upload stores the item and returns `Tibi-Item-Id` and
+        `Tibi-Item-Url` headers.
+      responses:
+        "204": { description: Accepted; see the new Upload-Offset. }
+        "400": { description: The finished upload could not be stored (text/plain). }
+        "404": { description: No such upload. }
+        "409": { description: Upload-Offset does not match the server's. }
+    delete:
+      tags: [uploads]
+      summary: Abandon an upload (tus)
+      operationId: tusDelete
+      responses:
+        "204": { description: Abandoned. }
+        "404": { description: No such upload. }
+  /api/v1/uploads/{id}/item:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [uploads]
+      summary: The item a finished upload became
+      operationId: uploadItem
+      description: Requires scope `upload` and the token that created the upload.
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Item" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Not finished yet; `message` says how many bytes arrived.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/search:
     get:
       tags: [search]
@@ -557,7 +635,7 @@ components:
           properties:
             code:
               type: string
-              enum: [bad_request, empty, unauthorized, forbidden, not_found, too_large, internal]
+              enum: [bad_request, empty, unauthorized, forbidden, not_found, too_large, incomplete, internal]
             message: { type: string }
     Whoami:
       type: object

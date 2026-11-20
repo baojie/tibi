@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.13] — Resumable uploads
+
+### Added
+- tus 1.0 resumable uploads at `/api/v1/uploads/` (tusd v2): options in
+  `Upload-Metadata`, validated (and the quota checked) at creation; limit
+  `max_resumable_bytes` (default 2 GiB). Only the creating token can see or
+  continue an upload. The final PATCH runs the ingest pipeline (moving the
+  file, not copying it) and answers with `Tibi-Item-Id`/`Tibi-Item-Url`;
+  `GET /api/v1/uploads/{id}/item` returns the item (409 while incomplete).
+- Unfinished uploads are discarded after 24 hours (every GC pass).
+- The CLI uploads files over 20 MiB with tus, 16 MiB per request, with a
+  progress line on stderr; re-running the same command after an
+  interruption continues from the server's offset (state in
+  `~/.cache/tibi/uploads`). Transient network errors are retried.
+- `tibi_resumable_received_bytes_total` metric.
+- Verified with a real 500 MiB upload killed with SIGKILL halfway: the
+  re-run sent only the remaining 248 MiB and the item is byte-identical.
+
 ## [0.0.12] — MCP server
 
 ### Added

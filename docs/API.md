@@ -1,4 +1,4 @@
-# tibi API 0.0.12
+# tibi API 0.0.13
 
 <!-- Generated from api/openapi.yaml by `go run ./tools/apidoc`. Do not edit. -->
 
@@ -56,6 +56,10 @@ collection IDs share one namespace.
 | `DELETE` | [`/api/v1/collections/{id}`](#delete-api-v1-collections-id) | Delete a collection and its items |
 | `GET` | [`/api/v1/openapi.yaml`](#get-api-v1-openapi-yaml) | This document |
 | `GET` | [`/api/v1/stats`](#get-api-v1-stats) | Instance statistics |
+| `POST` | [`/api/v1/uploads/`](#post-api-v1-uploads) | Start a resumable upload (tus) |
+| `PATCH` | [`/api/v1/uploads/{id}`](#patch-api-v1-uploads-id) | Send bytes (tus) |
+| `DELETE` | [`/api/v1/uploads/{id}`](#delete-api-v1-uploads-id) | Abandon an upload (tus) |
+| `GET` | [`/api/v1/uploads/{id}/item`](#get-api-v1-uploads-id-item) | The item a finished upload became |
 | `GET` | [`/api/v1/whoami`](#get-api-v1-whoami) | Describe the calling token |
 | `GET` | [`/healthz`](#get-healthz) | Liveness probe |
 | `GET` | [`/metrics`](#get-metrics) | Prometheus metrics |
@@ -395,6 +399,84 @@ Storage, item counts, traffic and the most-served items. Requires scope `admin`.
 | 200 | Statistics. | `application/json` [Stats](#schema-stats) |
 | 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+
+<a id="post-api-v1-uploads"></a>
+### `POST /api/v1/uploads/`
+
+**Start a resumable upload (tus)**
+
+[tus 1.0](https://tus.io/protocols/resumable-upload) creation.
+Send `Tus-Resumable: 1.0.0`, `Upload-Length` (required) and
+`Upload-Metadata` with the upload options as base64 values
+(`filename`, `title`, `expires`, `visibility`, `lang`, `kind`,
+`keep_meta`, `slug`, `burn_after_read`, `source`, `meta`). The
+`Location` header is the upload URL. Limit: `max_resumable_bytes`
+(default 2 GiB). Uploads not finished within 24 hours are discarded.
+Requires scope `upload`. Protocol errors (400, 413) are tus-style
+plain text.
+
+| status | meaning | body |
+|---|---|---|
+| 201 | Created; see the Location header. | — |
+| 400 | Bad Upload-Length or metadata (text/plain). | — |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 413 | Larger than max_resumable_bytes or the token's quota (text/plain). | — |
+
+<a id="patch-api-v1-uploads-id"></a>
+### `PATCH /api/v1/uploads/{id}`
+
+**Send bytes (tus)**
+
+Body: the bytes starting at `Upload-Offset`
+(`Content-Type: application/offset+octet-stream`). The PATCH that
+completes the upload stores the item and returns `Tibi-Item-Id` and
+`Tibi-Item-Url` headers.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+
+| status | meaning | body |
+|---|---|---|
+| 204 | Accepted; see the new Upload-Offset. | — |
+| 400 | The finished upload could not be stored (text/plain). | — |
+| 404 | No such upload. | — |
+| 409 | Upload-Offset does not match the server's. | — |
+
+<a id="delete-api-v1-uploads-id"></a>
+### `DELETE /api/v1/uploads/{id}`
+
+**Abandon an upload (tus)**
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+
+| status | meaning | body |
+|---|---|---|
+| 204 | Abandoned. | — |
+| 404 | No such upload. | — |
+
+<a id="get-api-v1-uploads-id-item"></a>
+### `GET /api/v1/uploads/{id}/item`
+
+**The item a finished upload became**
+
+Requires scope `upload` and the token that created the upload.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+
+| status | meaning | body |
+|---|---|---|
+| 200 | The item. | `application/json` [Item](#schema-item) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
+| 409 | Not finished yet; `message` says how many bytes arrived. | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-whoami"></a>
 ### `GET /api/v1/whoami`
