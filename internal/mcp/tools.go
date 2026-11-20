@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tibi/internal/client"
+	"tibi/internal/e2e"
 )
 
 // Toolbox implements the tools on top of the tibi API client.
@@ -62,6 +63,7 @@ var tools = []tool{
 				"text":  str("The text or code."),
 				"lang":  str("Language for highlighting, e.g. go, python, markdown, diff (default: detected)."),
 				"title": titleProp, "expires": expiresProp, "private": privateProp,
+				"encrypt": map[string]any{"type": "boolean", "description": "End-to-end encrypt: the server stores only ciphertext and the returned link carries the key after #k=. Use for secrets (credentials, logs with personal data). Default false."},
 			},
 			"required": []string{"text"},
 		},
@@ -141,6 +143,7 @@ type args struct {
 	Title   string `json:"title"`
 	Expires string `json:"expires"`
 	Private bool   `json:"private"`
+	Encrypt bool   `json:"encrypt"`
 	Limit   int    `json:"limit"`
 	Kind    string `json:"kind"`
 	Query   string `json:"query"`
@@ -172,6 +175,9 @@ func (t *Toolbox) Call(ctx context.Context, name string, raw json.RawMessage) (r
 	case "paste_text":
 		if strings.TrimSpace(a.Text) == "" {
 			return fail("text is empty")
+		}
+		if a.Encrypt {
+			return pasteEncrypted(ctx, cl, a)
 		}
 		it, _, err := cl.Upload(ctx, strings.NewReader(a.Text), int64(len(a.Text)), client.UploadOptions{
 			Title: a.Title, Lang: a.Lang, Kind: "text", Expires: a.Expires, Private: a.Private, Source: "mcp",
@@ -303,4 +309,23 @@ func listResult(items []client.Item, empty string) result {
 		out = append(out, map[string]any{"id": it.ID, "url": it.URL, "kind": it.Kind, "name": name, "created_at": it.CreatedAt})
 	}
 	return ok(strings.TrimRight(b.String(), "\n"), map[string]any{"items": out})
+}
+
+// pasteEncrypted encrypts locally; only ciphertext reaches the server, and
+// the key is only in the returned link.
+func pasteEncrypted(ctx context.Context, cl *client.Client, a args) result {
+	key, frag := e2e.NewKey()
+	blob, err := e2e.Encrypt(key, "", e2e.Header{Name: "paste.txt", Type: "text/plain; charset=utf-8", Lang: a.Lang}, []byte(a.Text))
+	if err != nil {
+		return fail("encrypt: %v", err)
+	}
+	it, _, err := cl.Upload(ctx, bytes.NewReader(blob), int64(len(blob)), client.UploadOptions{
+		Title: a.Title, Lang: a.Lang, Kind: "encrypted", Expires: a.Expires, Private: a.Private, Source: "mcp",
+	})
+	if err != nil {
+		return apiFail("paste", err)
+	}
+	link := it.URL + "#k=" + frag
+	text := link + "\nend-to-end encrypted: anyone with this full link (including the part after #) can read it; the server cannot."
+	return ok(text, map[string]any{"id": it.ID, "url": link, "kind": it.Kind, "size": it.Size, "visibility": it.Visibility, "expires_at": it.ExpiresAt, "encrypted": true})
 }

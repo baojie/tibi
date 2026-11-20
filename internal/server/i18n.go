@@ -8,7 +8,7 @@ import (
 	"tibi/internal/i18n"
 )
 
-var pageNames = []string{"file", "image", "text", "burn", "video", "audio", "collection", "upload", "recent"}
+var pageNames = []string{"file", "image", "text", "burn", "video", "audio", "collection", "upload", "recent", "encrypted"}
 
 // templateFuncs binds the catalog for one locale.
 func templateFuncs(c *i18n.Catalog, loc string) template.FuncMap {
@@ -19,7 +19,7 @@ func templateFuncs(c *i18n.Catalog, loc string) template.FuncMap {
 		// Strings for page scripts, as JSON in a data attribute (no inline
 		// scripts under the CSP).
 		"jsI18n": func() string {
-			b, _ := json.Marshal(c.Subset(loc, "action.", "fork.", "upload.", "token.", "recent.", "meta.", "label."))
+			b, _ := json.Marshal(c.Subset(loc, "action.", "fork.", "upload.", "token.", "recent.", "meta.", "label.", "e2e."))
 			return string(b)
 		},
 	}

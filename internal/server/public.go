@@ -226,7 +226,7 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request, itemID str
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	switch it.Kind {
-	case store.KindText, store.KindImage:
+	case store.KindText, store.KindImage, store.KindEncrypted:
 		s.renderView(w, r, it, viewOpts{burned: true})
 	default:
 		s.serveBlob(w, r, it, true)
@@ -404,6 +404,8 @@ type viewModel struct {
 	// OG holds link-preview (OpenGraph/Twitter) tags; nil when the item
 	// must not be previewed.
 	OG *ogMeta
+	// Ciphertext (base64) of a burned encrypted item: its raw URL is gone.
+	Ciphertext string
 }
 
 // ogMeta is what chat apps show when a link is pasted.
@@ -501,6 +503,22 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, it *store.It
 	}
 	page := "file"
 	switch it.Kind {
+	case store.KindEncrypted:
+		page = "encrypted"
+		if o.burned {
+			f, err := s.blobs.Open(r.Context(), blob.Key(it.SHA256))
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			b, err := io.ReadAll(f)
+			f.Close()
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			vm.Ciphertext = base64.StdEncoding.EncodeToString(b)
+		}
 	case store.KindVideo:
 		page = "video"
 	case store.KindAudio:
@@ -591,6 +609,6 @@ func (s *Server) viewCSP() string {
 	if raw := s.cfg.RawBaseURL; raw != "" && raw != s.cfg.BaseURL {
 		src += " " + raw
 	}
-	return "default-src 'self'; img-src " + src + " data: blob:; media-src " + src + "; connect-src " + src +
+	return "default-src 'self'; img-src " + src + " data: blob:; media-src " + src + " blob:; connect-src " + src +
 		"; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 }

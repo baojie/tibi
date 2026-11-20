@@ -14,6 +14,7 @@ import (
 
 	"tibi/internal/client"
 	"tibi/internal/config"
+	"tibi/internal/e2e"
 	"tibi/internal/mcp"
 	"tibi/internal/testutil"
 	"tibi/internal/testutil/testimg"
@@ -228,6 +229,19 @@ func TestPasteAndUpload(t *testing.T) {
 	}
 	if code, _ := fetch(t, r.Structured["url"].(string)); code != 404 {
 		t.Fatal("private paste is public")
+	}
+
+	// encrypted: the link carries the key; the server has only ciphertext.
+	r = h.tool("paste_text", map[string]any{"text": "api_key=abc123", "encrypt": true})
+	link, _ := r.Structured["url"].(string)
+	pageURL, frag, found := strings.Cut(link, "#k=")
+	if r.IsError || !found || r.Structured["encrypted"] != true {
+		t.Fatalf("encrypted paste: %+v", r)
+	}
+	_, ct := fetch(t, pageURL+"/raw")
+	key, _ := e2e.ParseKey(frag)
+	if _, plain, err := e2e.Decrypt(ct, key, ""); err != nil || string(plain) != "api_key=abc123" || bytes.Contains(ct, []byte("abc123")) {
+		t.Fatalf("encrypted paste content: %v %q", err, plain)
 	}
 
 	// list, search, delete

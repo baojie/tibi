@@ -1,4 +1,5 @@
 :root { --fg: #1d1d1f; --muted: #6e6e73; --bg: #fff; --accent: #8a3b12; --line: #e5e5ea; }
+[hidden] { display: none !important; } /* author display rules (e.g. .row) must not reveal hidden elements */
 @media (prefers-color-scheme: dark) { :root { --fg: #f2f2f7; --muted: #a1a1a6; --bg: #141414; --accent: #e8925f; --line: #2c2c2e; } }
 * { box-sizing: border-box; }
 body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); }

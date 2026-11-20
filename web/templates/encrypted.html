@@ -1,0 +1,20 @@
+{{define "content"}}
+<link rel="stylesheet" href="/static/vendor/highlight.css">
+<section class="item item-encrypted">
+  <h1><span id="e2e-name">{{.Title}}</span></h1>
+  <p class="notice muted">🔒 {{t "e2e.note"}}</p>
+  {{template "notices" .}}
+  <div id="e2e" data-raw="{{.LocalRaw}}" data-lang="{{.Item.Lang}}"{{with .Ciphertext}} data-ciphertext="{{.}}"{{end}}>
+    <p id="e2e-status" class="notice" aria-live="polite">{{t "e2e.decrypting"}}</p>
+    <form id="e2e-password" class="row" hidden>
+      <input name="password" type="password" autocomplete="off" placeholder="{{t "e2e.password_placeholder"}}" required>
+      <button type="submit" class="button">{{t "e2e.unlock"}}</button>
+    </form>
+    <p id="e2e-actions" class="actions" hidden></p>
+    <div id="e2e-content"></div>
+  </div>
+</section>
+<script src="/static/i18n.js" defer></script>
+<script src="/static/vendor/highlight.min.js" defer></script>
+<script src="/static/e2e.js" defer></script>
+{{end}}

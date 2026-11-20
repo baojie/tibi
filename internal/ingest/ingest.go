@@ -19,11 +19,13 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 
 	_ "golang.org/x/image/webp"
 
 	"tibi/internal/blob"
+	"tibi/internal/e2e"
 	"tibi/internal/render"
 	"tibi/internal/store"
 )
@@ -159,10 +161,48 @@ func (p *Pipeline) PrepareFile(ctx context.Context, path string, o Options) (*Pr
 
 func checkKind(k string) error {
 	switch k {
-	case "", store.KindText, store.KindFile:
+	case "", store.KindText, store.KindFile, store.KindEncrypted:
 		return nil
 	}
-	return &BadRequestError{fmt.Sprintf("kind %q cannot be forced (allowed: text, file)", k)}
+	return &BadRequestError{fmt.Sprintf("kind %q cannot be forced (allowed: text, file, encrypted)", k)}
+}
+
+// prepareEncrypted stores client-side encrypted content as opaque bytes
+// (PLAN A9): no sniffing, metadata stripping, thumbnails or indexing. The
+// file name, if a client sent one, is dropped: it belongs inside the
+// ciphertext. The language is a non-secret display hint.
+func (p *Pipeline) prepareEncrypted(pr *Prepared, n int64, o Options) (*Prepared, error) {
+	// The format's minimum size is well under 64 bytes, so the start of the
+	// file is enough to check the header.
+	if e2e.Check(readAll(pr.file, min(n, 64))) != nil {
+		return nil, &BadRequestError{"kind=encrypted needs content in the tibi encrypted format (version " + strconv.Itoa(e2e.Version) + ")"}
+	}
+	lang := ""
+	if o.Lang != "" {
+		l, ok := render.ResolveLang(o.Lang)
+		if !ok {
+			return nil, &BadRequestError{fmt.Sprintf("unknown lang %q", o.Lang)}
+		}
+		lang = l
+	}
+	it := &store.Item{
+		Kind: store.KindEncrypted, Mime: "application/octet-stream", Ext: "bin", Size: n,
+		Title: o.Title, Lang: lang, Visibility: o.Visibility, Slug: o.Slug, BurnAfterRead: o.Burn,
+		Source: o.Source, Meta: o.Meta, TokenID: o.TokenID, ExpiresAt: o.ExpiresAt, ForkedFrom: o.ForkedFrom,
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, io.NewSectionReader(pr.file, 0, n)); err != nil {
+		return nil, err
+	}
+	it.SHA256 = hex.EncodeToString(h.Sum(nil))
+	pr.Item = it
+	return pr, nil
+}
+
+func readAll(f *os.File, n int64) []byte {
+	b := make([]byte, n)
+	m, _ := f.ReadAt(b, 0)
+	return b[:m]
 }
 
 // prepareSpooled runs steps 2–4 on n bytes spooled in pr.file.
@@ -175,6 +215,11 @@ func (p *Pipeline) prepareSpooled(ctx context.Context, pr *Prepared, n int64, o 
 	}()
 	if n == 0 {
 		return nil, ErrEmpty
+	}
+	if o.Kind == store.KindEncrypted {
+		res, err := p.prepareEncrypted(pr, n, o)
+		ok = err == nil
+		return res, err
 	}
 	tmp := pr.file
 	limit := max(o.MaxBytes, n)
