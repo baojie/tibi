@@ -24,6 +24,19 @@ backend = "fs"                      # fs | s3
 The metadata database is always local (`data_dir/tibi.db`), even when blobs
 live in object storage.
 
+## Web pages and the signing key
+
+`/upload` and `/recent` are the owner's pages. Open `/upload`, paste an API
+token once, and the browser keeps it in local storage (on that origin
+only). Anyone can load these pages, but they show nothing without a valid
+token. Consider serving raw content from a separate origin
+(`raw_base_url`) for defence in depth.
+
+Share links for private items are signed with a key the server creates on
+first start at `data_dir/secret.key` (or `secret_key_file`), mode 0600.
+Back it up with the database; replacing it invalidates every share link
+issued so far (a quick way to revoke them all).
+
 ## Blob storage
 
 ### Local disk (`fs`, default)

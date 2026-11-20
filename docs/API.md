@@ -1,4 +1,4 @@
-# tibi API 0.0.8
+# tibi API 0.0.9
 
 <!-- Generated from api/openapi.yaml by `go run ./tools/apidoc`. Do not edit. -->
 
@@ -15,6 +15,9 @@ scopes: `upload` (upload, list, search, view metadata, change metadata),
 (all of them).
 
 **Errors** use one envelope: `{"error": {"code": "…", "message": "…"}}`.
+
+**Web pages.** `/upload` and `/recent` are the owner's pages; they keep
+an API token in the browser's local storage and call this API.
 
 **Public URLs** (not part of this API) are fixed forever:
 `/{id}` view page, `/{id}.{ext}` raw bytes for embedding, `/{id}/raw`,
@@ -38,6 +41,7 @@ collection IDs share one namespace.
 | `PATCH` | [`/api/v1/items/{id}`](#patch-api-v1-items-id) | Change metadata |
 | `DELETE` | [`/api/v1/items/{id}`](#delete-api-v1-items-id) | Delete an item |
 | `POST` | [`/api/v1/items/{id}/fork`](#post-api-v1-items-id-fork) | Fork an item (new version) |
+| `POST` | [`/api/v1/items/{id}/share-link`](#post-api-v1-items-id-share-link) | Signed, time-limited link |
 | `GET` | [`/api/v1/search`](#get-api-v1-search) | Full-text search |
 | `GET` | [`/api/v1/collections`](#get-api-v1-collections) | List collections, newest first |
 | `POST` | [`/api/v1/collections`](#post-api-v1-collections) | Create a collection |
@@ -216,6 +220,30 @@ Request body: `application/octet-stream` (string (binary))
 | 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
 | 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
 | 413 | The upload exceeds `max_upload_bytes`. | `application/json` [Error](#schema-error) |
+
+<a id="post-api-v1-items-id-share-link"></a>
+### `POST /api/v1/items/{id}/share-link`
+
+**Signed, time-limited link**
+
+Returns a view-page URL carrying `exp` and `sig` parameters (an
+HMAC-SHA256 over the item ID and expiry, with a server secret).
+Anyone with the link can view the item — typically a private one —
+and its raw, download and thumbnail URLs until the link expires; it
+never outlives the item. Requires scope `upload`.
+
+| parameter | in | type | description |
+|---|---|---|---|
+| `id` | path, required | string |  |
+| `ttl` | query | string | Lifetime, e.g. `10m`, `1h`, `7d`; at most `365d`. Default `1h`. |
+
+| status | meaning | body |
+|---|---|---|
+| 200 | The signed URL. | `application/json` [ShareLink](#schema-sharelink) |
+| 400 | The request is invalid; `message` says why. | `application/json` [Error](#schema-error) |
+| 401 | The token is missing, invalid or revoked. | `application/json` [Error](#schema-error) |
+| 403 | The token lacks the required scope. | `application/json` [Error](#schema-error) |
+| 404 | No such item (or it was deleted or has expired). | `application/json` [Error](#schema-error) |
 
 <a id="get-api-v1-search"></a>
 ### `GET /api/v1/search`
@@ -503,6 +531,14 @@ An Item plus `snippet`, the line of text containing the first query word.
 |---|---|---|---|
 | `items` | array of [SearchHit](#schema-searchhit) | yes |  |
 | `next_cursor` | string or null | yes |  |
+
+<a id="schema-sharelink"></a>
+### ShareLink
+
+| field | type | required | description |
+|---|---|---|---|
+| `expires_at` | integer | yes | Unix seconds. |
+| `url` | string (uri) | yes |  |
 
 <a id="schema-whoami"></a>
 ### Whoami

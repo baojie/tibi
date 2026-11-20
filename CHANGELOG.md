@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.0.9] — Web experience
+
+### Added
+- `/upload`: the owner's upload page. Connect once with an API token (kept
+  in the browser's local storage, verified with `whoami`), then drag and
+  drop, pick files, or paste screenshots/images straight from the
+  clipboard; type or paste text pastes with an optional language. Options:
+  expiry, private, burn after reading, upload as one collection. Results
+  with copy buttons; upload progress.
+- `/recent`: newest items (or search results) with thumbnails, select all,
+  bulk delete, load more. Private thumbnails load with the token.
+- OpenGraph and Twitter card tags on view and collection pages, so links
+  unfurl in Slack, Discord, Telegram, etc. — never for private,
+  burn-after-read or encrypted items (nor through share links).
+- Signed share links: `POST /api/v1/items/{id}/share-link?ttl=1h` and
+  `tibi share ID [--ttl]` return an HMAC-signed URL that opens a private
+  item (page, raw, download, thumbnail) until it expires, never past the
+  item's own expiry. The key is created on first start
+  (`secret_key_file`, default `data_dir/secret.key`, mode 0600).
+- Internationalized UI: every page string lives in `web/i18n/*.toml`;
+  English and Simplified Chinese ship. The locale follows
+  `Accept-Language` (fallback `default_locale`); page scripts get their
+  strings through a data attribute (no inline scripts). A test keeps the
+  catalogs complete.
+- The Fork button on text pages now appears in browsers connected on the
+  upload page.
+- A real-browser end-to-end test (Chrome via the DevTools protocol, no
+  dependencies) pastes an image into `/upload` and checks the resulting
+  link; it runs in CI.
+
 ## [0.0.8] — Collections and forks
 
 ### Added
