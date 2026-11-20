@@ -81,3 +81,11 @@ func TestAPIDocUpToDate(t *testing.T) {
 		t.Fatal("docs/API.md is out of date; run: go run ./tools/apidoc > docs/API.md")
 	}
 }
+
+// The extension's generated API types must be regenerated with the spec.
+func TestJSTypesUpToDate(t *testing.T) {
+	got, err := os.ReadFile("../../extensions/chrome/lib/api.gen.js")
+	if err != nil || string(got) != load(t).JS() {
+		t.Fatal("extensions/chrome/lib/api.gen.js is out of date; run: go run ./tools/apidoc -js > extensions/chrome/lib/api.gen.js")
+	}
+}
