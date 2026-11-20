@@ -41,6 +41,10 @@ func contractChecked(t testing.TB, h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
+		if r.Method == http.MethodOptions {
+			h.ServeHTTP(w, r) // CORS preflights are transport, not API
+			return
+		}
 		if tusProtocol(r) {
 			h.ServeHTTP(w, r) // tus requests follow the tus spec (tested on their own)
 			return

@@ -162,7 +162,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Robots-Tag", "noindex, nofollow, noarchive")
 	h.Set("Referrer-Policy", "no-referrer")
 	sw := &statusWriter{ResponseWriter: w, status: 200}
-	s.mux.ServeHTTP(sw, r)
+	if !s.cors(sw, r) {
+		s.mux.ServeHTTP(sw, r)
+	}
 	metrics.Request(r.Method, sw.status)
 	s.log.Info("http", "method", r.Method, "path", r.URL.Path, "status", sw.status,
 		"bytes", sw.n, "dur_ms", time.Since(start).Milliseconds())

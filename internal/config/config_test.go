@@ -12,9 +12,13 @@ func TestLoad(t *testing.T) {
 	p := filepath.Join(dir, "server.toml")
 	os.WriteFile(p, []byte("base_url = \"https://example.com/\"\ndata_dir = \"/tmp/tibi-test\"\nmax_upload_bytes = 123\n"), 0o600)
 	t.Setenv("TIBI_MAX_UPLOAD_BYTES", "456")
+	t.Setenv("TIBI_CORS_ORIGINS", "chrome-extension://abc, https://app.example")
 	c, err := Load(p, true)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if strings.Join(c.CORSOrigins, "|") != "chrome-extension://abc|https://app.example" {
+		t.Fatalf("cors origins: %q", c.CORSOrigins)
 	}
 	if c.BaseURL != "https://example.com" || c.MaxUploadBytes != 456 || c.Listen != "127.0.0.1:8070" {
 		t.Fatalf("%+v", c)

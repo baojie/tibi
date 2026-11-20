@@ -199,6 +199,12 @@ func applyEnv(c *Server, getenv func(string) string) error {
 			*p = v
 		}
 	}
+	if v, ok := lookup(getenv, "TIBI_CORS_ORIGINS"); ok {
+		c.CORSOrigins = strings.Fields(strings.ReplaceAll(v, ",", " "))
+	}
+	if v, ok := lookup(getenv, "TIBI_ALLOWED_REFERERS"); ok {
+		c.AllowedReferers = strings.Fields(strings.ReplaceAll(v, ",", " "))
+	}
 	ints := map[string]*int64{
 		"TIBI_MAX_UPLOAD_BYTES":    &c.MaxUploadBytes,
 		"TIBI_MAX_RESUMABLE_BYTES": &c.MaxResumableBytes,
