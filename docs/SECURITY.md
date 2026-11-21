@@ -35,6 +35,9 @@ details are in [DEPLOY.md](DEPLOY.md); the API rules in [API.md](API.md).
 - Burn-after-read items are deleted when revealed (a POST, so link
   previewers do not consume them; cross-site reveals are refused). The
   revealer gets a 10-minute link to the content.
+  Their content is not indexed for search, and in the API list and search
+  they appear only to `read_private` tokens and the token that uploaded
+  them.
 
 ## Abuse and cost
 
@@ -42,6 +45,26 @@ Per-token rate limit, upload size limits, per-token quotas (unfinished
 uploads included), daily bandwidth caps per item and per instance, hotlink
 protection, bounded image decoding and conversion. Public pages are not
 rate limited by tibi; do that per IP in the reverse proxy.
+
+## AI agents (MCP)
+
+An agent can be steered by text it reads (prompt injection), so `tibi mcp`
+gives it less than the CLI has
+([design](design/2026-11-21-security-hardening.md)):
+
+- `upload_file` reads only files under the working directory (not when
+  that is the home directory or `/`), the temp directory and directories
+  the user allows with `--allow-dir`. Files under `~/.ssh`, `~/.gnupg`,
+  `~/.aws`, `~/.config`, `~/.claude` and similar, hidden files and
+  key or credential file names (`*.pem`, `*.key`, `id_ed25519`,
+  `credentials*`, …) are refused everywhere, symlinks resolved first.
+- Agent uploads expire after 7 days unless the agent asks otherwise.
+- `delete_item` exists only with `--allow-delete`.
+- Give the agent its own upload-only token (`TIBI_TOKEN` in the MCP
+  entry); `tibi mcp` warns when its token can do more.
+
+This protects agents whose only way out is tibi. An agent that also has a
+shell or a file-reading tool can read files itself.
 
 ## End-to-end encrypted pastes
 

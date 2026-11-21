@@ -77,7 +77,8 @@ usage:
   tibi share ID [--ttl 1h]         signed, expiring link (e.g. for a private item)
   tibi serve [--config PATH]       run the server
   tibi admin ...                   manage the server (tokens)
-  tibi mcp                         MCP server on stdio, for AI agents (uses tibi login's config)
+  tibi mcp [--allow-dir DIR] [--allow-delete] [--default-expires 7d]
+                                   MCP server on stdio, for AI agents (uses tibi login's config)
 
 upload flags:
   -n, --name NAME    filename for stdin uploads

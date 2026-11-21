@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/baojie/tibi/internal/client"
 	"github.com/baojie/tibi/internal/config"
@@ -28,11 +29,19 @@ type harness struct {
 	id  int
 }
 
+// start runs a server whose toolbox offers every tool and may upload from
+// the temp directory (where tests keep their files).
 func start(t *testing.T, mk func() (*client.Client, error)) *harness {
+	t.Helper()
+	return startWith(t, &mcp.Toolbox{Client: mk, MaxFileBytes: 1 << 20,
+		Paths: mcp.PathPolicy{TempDir: os.TempDir()}, AllowDelete: true})
+}
+
+func startWith(t *testing.T, tb *mcp.Toolbox) *harness {
 	t.Helper()
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
-	srv := &mcp.Server{Name: "tibi", Version: "test", Tools: &mcp.Toolbox{Client: mk, MaxFileBytes: 1 << 20}}
+	srv := &mcp.Server{Name: "tibi", Version: "test", Tools: tb}
 	go func() {
 		srv.Serve(context.Background(), inR, outW)
 		outW.Close()
@@ -295,7 +304,8 @@ func TestToolErrors(t *testing.T) {
 	}{
 		{"upload_file", map[string]any{"path": big}, "too large"},
 		{"paste_text", map[string]any{"text": strings.Repeat("x", 2000)}, "too large"},
-		{"upload_file", map[string]any{"path": "/no/such/file.png"}, "cannot open"},
+		{"upload_file", map[string]any{"path": filepath.Join(t.TempDir(), "file.png")}, "cannot open"},
+		{"upload_file", map[string]any{"path": "/no/such/file.png"}, "outside"},
 		{"upload_file", map[string]any{"path": t.TempDir()}, "not a regular file"},
 		{"upload_file", map[string]any{}, "path is required"},
 		{"paste_text", map[string]any{"text": "  "}, "empty"},
@@ -332,5 +342,46 @@ func TestToolErrors(t *testing.T) {
 	// After all that, the session still works.
 	if r := h.tool("paste_text", map[string]any{"text": "still fine"}); r.IsError {
 		t.Fatalf("session broken: %+v", r)
+	}
+}
+
+// TestAgentDefaults: delete_item is off unless allowed, uploads expire by
+// default, refusals come back as tool errors (design 2026-11-21 §1–3).
+func TestAgentDefaults(t *testing.T) {
+	e := testutil.New(t, nil)
+	tok := e.Token("t", "upload", "delete")
+	home := t.TempDir()
+	os.MkdirAll(filepath.Join(home, ".ssh"), 0o700)
+	key := filepath.Join(home, ".ssh", "id_ed25519")
+	os.WriteFile(key, []byte("PRIVATE KEY"), 0o600)
+	tb := &mcp.Toolbox{Client: connected(e, tok), MaxFileBytes: 1 << 20, DefaultExpires: "7d",
+		Paths: mcp.PathPolicy{WorkDir: home, Home: home, TempDir: os.TempDir()}}
+	h := startWith(t, tb)
+	h.initialize()
+
+	r := h.call("tools/list", nil)
+	if strings.Contains(string(r.Result), "delete_item") || !strings.Contains(string(r.Result), "Default: 7d.") {
+		t.Fatalf("tools/list: %s", r.Result)
+	}
+	if r := h.call("tools/call", map[string]any{"name": "delete_item", "arguments": map[string]any{"id": "zzzzzzzz"}}); r.Error == nil {
+		t.Fatal("delete_item callable without --allow-delete")
+	}
+
+	r2 := h.tool("paste_text", map[string]any{"text": "hello"})
+	exp, _ := r2.Structured["expires_at"].(float64)
+	if r2.IsError || exp == 0 || int64(exp)-time.Now().Unix() > 7*86400+60 || int64(exp)-time.Now().Unix() < 7*86400-60 {
+		t.Fatalf("default expiry: %+v", r2)
+	}
+	if r := h.tool("paste_text", map[string]any{"text": "keep", "expires": "never"}); r.IsError || r.Structured["expires_at"] != nil {
+		t.Fatalf("explicit never: %+v", r)
+	}
+
+	r3 := h.tool("upload_file", map[string]any{"path": "~/.ssh/id_ed25519"})
+	if !r3.IsError || !strings.Contains(r3.Content[0].Text, "never uploaded") {
+		t.Fatalf("key upload: %+v", r3)
+	}
+	_, b := httpGet(t, e.Srv.URL+"/api/v1/items", tok)
+	if strings.Count(string(b), `"id"`) != 2 {
+		t.Fatalf("something besides the two pastes was uploaded: %s", b)
 	}
 }

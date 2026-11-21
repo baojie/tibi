@@ -119,7 +119,8 @@ func (s *Server) handle(ctx context.Context, req request) (any, *rpcError) {
 			"serverInfo":      map[string]any{"name": s.Name, "title": "tibi", "version": s.Version},
 			"instructions": "tibi shares files and text by URL. Use upload_file for a local file (images, PDFs, " +
 				"logs, archives…) and paste_text for text or code you have in hand; both return a link anyone can " +
-				"open. Set private=true for things that must not be public, and expires (e.g. 1h, 7d) for temporary shares.",
+				"open. Set private=true for things that must not be public, and expires (e.g. 1h, 30d, never) when the default " +
+				"(see the expires parameter) does not fit.",
 		}, nil
 	case "ping":
 		return map[string]any{}, nil

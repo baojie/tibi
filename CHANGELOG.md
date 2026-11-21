@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [Unreleased] — Hardening for agents
+
+### Changed
+- `tibi mcp` limits what an agent can publish
+  ([design](docs/design/2026-11-21-security-hardening.md)):
+  `upload_file` only reads files under the working directory (not when that
+  is `$HOME` or `/`), the temp directory and directories allowed with
+  `--allow-dir` / `TIBI_MCP_ALLOW_DIRS`; files under `~/.ssh`, `~/.config`,
+  `~/.gnupg`, `~/.aws` and similar, hidden files and key or credential file
+  names are always refused, also through symlinks.
+- `tibi mcp`: `delete_item` is offered only with `--allow-delete`.
+- `tibi mcp`: uploads and pastes expire after 7 days unless the agent asks
+  for another expiry (`--default-expires`, `never` for none).
+- `tibi mcp` warns on stderr when its token has scopes an agent does not
+  need (`admin`, `read_private`, `delete` without `--allow-delete`).
+
+### Fixed
+- Search returned the matching line of a burn-after-read paste to any
+  upload token, reading it without consuming it. Burn-after-read content is
+  no longer indexed (migration 0007 removes what was), and the API list and
+  search show such items only to `read_private` tokens and the token that
+  uploaded them.
+- An upload token could add items to a private collection it cannot see,
+  and the response revealed the collection's title.
+
 ## [0.1.2] — Homebrew
 
 ![brew install baojie/tap/tibi, then tibi version](docs/screenshots/v0.1.2.png)

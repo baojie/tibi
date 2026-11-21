@@ -239,7 +239,7 @@ func (s *Store) Search(ctx context.Context, f SearchFilter) ([]SearchHit, string
 		q += ` AND i.kind = ?`
 		all = append(all, f.Kind)
 	}
-	if c, a := f.Private.clause("i."); c != "" {
+	if c, a := f.Private.itemClause("i."); c != "" {
 		q += c
 		all = append(all, a...)
 	}

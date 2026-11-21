@@ -173,7 +173,7 @@ in the same settings.
 
 `tibi mcp` is a [Model Context Protocol](https://modelcontextprotocol.io)
 server on stdio. It uses the same server and token as the CLI (`tibi login`,
-or `TIBI_SERVER` / `TIBI_TOKEN`), so log in once first. Agents get five
+or `TIBI_SERVER` / `TIBI_TOKEN`), so log in once first. Agents get these
 tools:
 
 | tool | does |
@@ -182,7 +182,19 @@ tools:
 | `paste_text(text, lang?, title?, expires?, private?, encrypt?)` | publish text or code as a highlighted paste; `encrypt` makes it end-to-end encrypted |
 | `list_items(limit?, kind?)` | recent uploads |
 | `search_items(query)` | full-text search |
-| `delete_item(id)` | delete by ID or URL |
+| `delete_item(id)` | delete by ID or URL; only with `--allow-delete` |
+
+Because an agent can be talked into things by what it reads, `tibi mcp`
+limits it (see [SECURITY.md](SECURITY.md#ai-agents-mcp)):
+
+- `upload_file` reads only files under the directory the client started it
+  in (not when that is your home directory), the temp directory, and
+  directories you add with `--allow-dir DIR` (repeatable) or
+  `TIBI_MCP_ALLOW_DIRS`. Keys, credentials, hidden files and anything
+  under `~/.ssh`, `~/.config` and similar are always refused.
+- Items expire after 7 days unless the agent asks for another expiry;
+  change the default with `--default-expires 30d` (or `never`).
+- `delete_item` is offered only with `--allow-delete`.
 
 Uploads are tagged `source=mcp`. Failures (bad token, file too large,
 server down) come back as tool errors the agent can read and act on.
@@ -208,5 +220,7 @@ coverage.html and give me the link".
 ```
 
 Add `"env": {"TIBI_SERVER": "https://tibi.example.com", "TIBI_TOKEN": "tibi_…"}`
-if the client does not see your CLI login. Give agents a token with only the
-scopes they need (`upload`, plus `delete` if they may delete).
+if the client does not see your CLI login. Give agents a token of their own
+with only the scopes they need (`upload`, plus `delete` with
+`--allow-delete`); `tibi mcp` warns on stderr when its token has more.
+Flags go after `mcp`, e.g. `"args": ["mcp", "--allow-dir", "/srv/reports"]`.

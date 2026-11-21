@@ -133,8 +133,10 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 			}
 			it.seq = rowid
 			body := it.IndexBody
-			if it.Kind == KindEncrypted {
-				body = "" // never index ciphertext
+			if it.Kind == KindEncrypted || it.BurnAfterRead {
+				// Never index ciphertext, nor burn-after-read content:
+				// search must not read it without consuming it.
+				body = ""
 			}
 			return indexItem(ctx, tx, rowid, it.Title, it.Filename, body)
 		})
@@ -251,12 +253,21 @@ type PrivateAccess struct {
 }
 
 // clause returns an SQL condition (with its argument) limiting private
-// items; col is the column prefix ("" or "i.").
+// rows; col is the column prefix ("" or "c."). Used for collections.
 func (p PrivateAccess) clause(col string) (string, []any) {
 	if p.All {
 		return "", nil
 	}
 	return " AND (" + col + "visibility != 'private' OR " + col + "token_id = ?)", []any{p.OwnToken}
+}
+
+// itemClause is clause for items: burn-after-read items are limited like
+// private ones, since knowing one's ID is enough to consume it.
+func (p PrivateAccess) itemClause(col string) (string, []any) {
+	if p.All {
+		return "", nil
+	}
+	return " AND ((" + col + "visibility != 'private' AND " + col + "burn_after_read = 0) OR " + col + "token_id = ?)", []any{p.OwnToken}
 }
 
 // ErrBadCursor is returned for malformed cursors.
@@ -300,7 +311,7 @@ func (s *Store) ListItems(ctx context.Context, f ListFilter) ([]*Item, string, e
 		q += ` AND collection_id = ?`
 		args = append(args, f.Collection)
 	}
-	if c, a := f.Private.clause(""); c != "" {
+	if c, a := f.Private.itemClause(""); c != "" {
 		q += c
 		args = append(args, a...)
 	}

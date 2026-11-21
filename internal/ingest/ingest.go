@@ -414,7 +414,7 @@ func Backfill(ctx context.Context, st *store.Store, bs blob.Store) (int, error) 
 	}
 	for _, it := range items {
 		body := ""
-		if it.Kind == store.KindText {
+		if it.Kind == store.KindText && !it.BurnAfterRead {
 			if f, err := bs.Open(ctx, blob.Key(it.SHA256)); err == nil {
 				b, _ := io.ReadAll(io.LimitReader(f, store.MaxIndexBytes))
 				f.Close()

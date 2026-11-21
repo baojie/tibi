@@ -456,6 +456,9 @@ func (s *Server) finishUpload(w http.ResponseWriter, r *http.Request, prepared [
 		}
 	default:
 		c, err := s.store.GetCollection(ctx, ct.id)
+		if p := privateAccess(r); err == nil && c.Visibility == store.Private && !p.All && c.TokenID != p.OwnToken {
+			err = store.ErrNotFound // answered like a missing one
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			apiError(w, http.StatusBadRequest, "bad_request", "no such collection "+ct.id)
 			return
