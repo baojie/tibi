@@ -16,7 +16,8 @@ export async function launch(chromePath = "google-chrome", { lang = "en-US" } = 
     try { rmSync(profile, { recursive: true, force: true }); } catch {}
   };
   let target;
-  for (let i = 0; i < 50 && !target; i++) {
+  // Up to 30 s: a cold CI runner's first Chrome start can take over 10 s.
+  for (let i = 0; i < 150 && !target; i++) {
     await sleep(200);
     try { target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === "page"); } catch {}
   }
