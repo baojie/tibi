@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.1.2] — Homebrew
+
+![brew install baojie/tap/tibi, then tibi version](docs/screenshots/v0.1.2.png)
+
+### Added
+- Install with Homebrew on macOS and Linux: `brew install baojie/tap/tibi`.
+  Each release updates the cask in
+  [baojie/homebrew-tap](https://github.com/baojie/homebrew-tap); on macOS
+  the install clears the quarantine flag, since the binaries are not
+  notarized.
+
 ## [0.1.1] — First public release
 
 ![The upload page: a link button and a Markdown button](docs/screenshots/v0.1.1.png)

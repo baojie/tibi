@@ -103,6 +103,7 @@ homebrew_casks:
     skip_upload: "{{ if not .Env.HOMEBREW_TAP_TOKEN }}true{{ end }}"
     directory: Casks
     description: Self-hosted image host and pastebin — client and server
+    homepage: https://github.com/baojie/tibi
     binaries: [tibi]
     # The binaries are not notarized: drop the quarantine flag so macOS
     # Gatekeeper does not refuse to run them.

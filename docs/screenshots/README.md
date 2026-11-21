@@ -20,6 +20,7 @@ picture is cropped out.
 | 0.0.15 Chrome extension | `scripts/screenshots/extension.sh` | Node, Chrome, ImageMagick |
 | 0.0.16 Android | `scripts/screenshots/android.sh` | a booted emulator, adb, the Android SDK |
 | 0.0.17 ACDSeeN | `scripts/screenshots/acdseen.sh` | an ACDSeeN checkout (`ACDSEEN=…`) with its virtualenv |
+| 0.1.2 Homebrew | `scripts/screenshots/brew.sh` | brew ≥ 7 (Linux), `baojie/tap` not tapped; uses a local build, nothing is downloaded |
 
 Pictures show the current code, not the code of the old tag: each one is
 about the feature that version introduced, as it works today.
