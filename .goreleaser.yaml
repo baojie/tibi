@@ -97,13 +97,21 @@ homebrew_casks:
   - name: tibi
     repository:
       owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
-      name: homebrew-tibi
+      name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     # Without a token for the tap repository the cask is built but not pushed.
     skip_upload: "{{ if not .Env.HOMEBREW_TAP_TOKEN }}true{{ end }}"
     directory: Casks
     description: Self-hosted image host and pastebin — client and server
     binaries: [tibi]
+    # The binaries are not notarized: drop the quarantine flag so macOS
+    # Gatekeeper does not refuse to run them.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/tibi"]
+          end
 
 release:
   draft: true

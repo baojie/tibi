@@ -5,7 +5,7 @@ name: release
 # Switched OFF until the repository variable RELEASE_ENABLED is set to
 # "true" (Settings → Secrets and variables → Actions → Variables). Until
 # then tags only run CI. The Homebrew cask is pushed only when the secret
-# HOMEBREW_TAP_TOKEN (a token that can push to <owner>/homebrew-tibi) is set.
+# HOMEBREW_TAP_TOKEN (a token that can push to <owner>/homebrew-tap) is set.
 on:
   push:
     tags: ["v*"]
