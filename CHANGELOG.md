@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.1.5] — Where each item came from
+
+![Recent items with the source of each item, seen only by its owner](docs/screenshots/v0.1.5.png)
+
+### Added
+- Items record where they came from: `source_url` (upload option, header
+  `X-Tibi-Source-Url`, tus metadata). The Chrome extension sends the image's
+  address (the page for text and screenshots), the upload page the address
+  of an image dragged or copied from another page, Android the link a share
+  brings, the CLI `--source-url`, MCP `source_url`. Shown only to the
+  uploading token and `read_private` tokens (API, Recent items, `tibi
+  info`), never on public pages; not with end-to-end encryption.
+  Migration 0008 fills it for earlier Chrome uploads from `meta.page_url`.
+
 ## [0.1.4] — Thumbnail view of recent items
 
 ![Recent items in the thumbnail view: images, notes and code as same-size cards](docs/screenshots/v0.1.4.png)

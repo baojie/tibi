@@ -4,7 +4,7 @@
 #
 #   scripts/screenshots/run.sh [VERSION...]     # default: all
 #
-# Builds tibi, runs throwaway servers on 127.0.0.1:18100–18104 with demo
+# Builds tibi, runs throwaway servers on 127.0.0.1:18100–18105 with demo
 # data, records real terminal sessions and takes the pictures with headless
 # Chrome. Needs Node ≥ 22, Chrome, ImageMagick, ffmpeg, jq and Docker (an
 # S3 gateway for 0.0.5, the tibi image for 0.0.11). The extension (0.0.15,
@@ -340,6 +340,22 @@ if wanted 0.1.4; then
   scene "$(jq -nc --arg out "$out/v0.1.4.png" --arg url "http://localhost:18104/recent" --arg run "$run" \
     '{out:$out,url:$url,width:1100,height:640,run:$run,
       waitAfter:"document.getElementById(\"items\").className === \"item-grid\" && [...document.querySelectorAll(\"#items img\")].length === 4 && [...document.querySelectorAll(\"#items img\")].every((i) => i.complete && i.naturalWidth > 0)"}')"
+fi
+
+# 0.1.5 — every item remembers where it came from, shown only to its owner.
+if wanted 0.1.5; then
+  start sources 18105
+  st=$(token sources 18105 upload,delete,read_private laptop)
+  up5() { (cd "$demo" && TIBI_SERVER=http://localhost:18105 TIBI_TOKEN=$st tibi up --no-copy "$@" >/dev/null); }
+  up5 --source-url https://photos.example.com/albums/coast/sunset-1400.jpg sunset.jpg
+  up5 --source-url https://news.example.org/2026/11/notes-from-the-meeting notes.txt
+  up5 --source-url https://gist.example.dev/greet/server.go server.go
+  up5 --source-url https://wiki.example.net/poems/ti-xi-lin-bi poem.txt
+  up5 a.jpg
+  run="localStorage.setItem('tibi.token', '$st'); localStorage.setItem('tibi.recentView', 'list'); location.reload()"
+  scene "$(jq -nc --arg out "$out/v0.1.5.png" --arg url "http://localhost:18105/recent" --arg run "$run" \
+    '{out:$out,url:$url,width:1100,height:520,run:$run,
+      waitAfter:"document.querySelectorAll(\"#items a.src\").length === 4 && [...document.querySelectorAll(\"#items img\")].every((i) => i.complete && i.naturalWidth > 0)"}')"
 fi
 
 echo "{}]" >> "$scenes"

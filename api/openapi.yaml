@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: tibi API
-  version: 0.1.4
+  version: 0.1.5
   description: |
     tibi (题壁) is a self-hosted image host and pastebin: upload an image, a
     text or code snippet, or any file, and get back a URL to share.
