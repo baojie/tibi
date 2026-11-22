@@ -6,6 +6,10 @@
     <form id="search-form" class="row">
       <input type="search" name="q" placeholder="{{t "recent.search"}}">
       <button type="submit" class="button secondary">{{t "recent.search"}}</button>
+      <span class="tabs" id="view" role="group" aria-label="{{t "recent.view"}}">
+        <button type="button" class="tab" data-view="list">{{t "recent.view_list"}}</button>
+        <button type="button" class="tab" data-view="grid">{{t "recent.view_grid"}}</button>
+      </span>
       <span class="spacer"></span>
       <label><input type="checkbox" id="select-all"> {{t "recent.select_all"}}</label>
       <button type="button" class="button" id="delete-selected" disabled>{{t "recent.delete_selected"}}</button>

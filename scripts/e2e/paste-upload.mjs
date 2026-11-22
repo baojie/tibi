@@ -55,6 +55,33 @@ try {
   })()`);
   if (ok !== "image|image/png|37x23|true") fail("uploaded item mismatch: " + ok);
   console.log("OK: pasted image →", link, "(" + ok + ")");
+
+  // 4. Recent items: list by default; the thumbnail view shows same-size
+  // cards with the image's thumbnail and the start of a text, and is kept.
+  const note = await (await fetch(base + "/api/v1/items?filename=note.txt", { method: "POST", headers: { Authorization: "Bearer " + token }, body: "Shopping list\n- milk\n- bread" })).json();
+  await b.navigate(base + "/recent");
+  await b.waitFor(`document.querySelectorAll("#items li").length >= 2`, "recent list");
+  if (await b.evaluate(`document.getElementById("items").className`) !== "item-list") fail("recent does not start as a list");
+  const gridOK = async () => {
+    await b.waitFor(`document.getElementById("items").className === "item-grid" && document.querySelectorAll("#items li").length >= 2`, "grid view");
+    const card = (u) => `[...document.querySelectorAll("#items li")].find((li) => li.querySelector("a.name").href === ${JSON.stringify(u)})`;
+    await b.waitFor(`(() => { const i = ${card(link)}.querySelector(".pv img"); return i && i.complete && i.naturalWidth > 0; })()`, "image thumbnail in grid");
+    const text = await b.evaluate(`${card(note.url)}.querySelector(".pv .text")?.textContent`);
+    if (text !== "Shopping list\n- milk\n- bread") fail("text card shows " + JSON.stringify(text));
+    const sizes = await b.evaluate(`[...new Set([...document.querySelectorAll("#items li")].map((li) => li.offsetWidth + "x" + li.offsetHeight))]`);
+    if (sizes.length !== 1) fail("cards differ in size: " + sizes);
+    return sizes[0];
+  };
+  await b.evaluate(`document.querySelector('#view [data-view="grid"]').click()`);
+  const size = await gridOK();
+  await b.navigate(base + "/recent");
+  await gridOK();
+  console.log("OK: recent → thumbnail view: image thumbnail and text start in same-size cards (" + size + "), kept after reload");
+  if (process.env.SHOT_DIR) {
+    await b.send("Emulation.setDeviceMetricsOverride", { width: 1000, height: 620, deviceScaleFactor: 1, mobile: false });
+    const { data } = await b.send("Page.captureScreenshot", { format: "png" });
+    (await import("node:fs")).writeFileSync(process.env.SHOT_DIR + "/recent-grid.png", Buffer.from(data, "base64"));
+  }
   b.close();
   process.exit(0);
 } catch (e) {

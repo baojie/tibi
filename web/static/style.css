@@ -84,3 +84,22 @@ main:has(.item-collection) { max-width: 1200px; }
 .results .button, .item-list .button { padding: 2px 10px; font-size: .85rem; }
 .button:disabled { opacity: .45; cursor: default; }
 .item-list a { color: var(--fg); }
+/* Recent items: the list keeps one row per item (thumbnail only); the grid
+   shows same-size cards with a thumbnail, the start of a text, or the kind. */
+.item-list .info { display: contents; }
+.item-list .pv { display: contents; }
+.item-list .pv.none { display: none; }
+.item-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.item-grid li { position: relative; display: flex; flex-direction: column; height: 230px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.item-grid li:hover, .item-grid li:has(input:checked) { border-color: var(--accent); }
+.item-grid input[type=checkbox] { position: absolute; top: 8px; left: 8px; z-index: 1; margin: 0; width: 16px; height: 16px; }
+.item-grid .pv { flex: 1; min-height: 0; display: block; position: relative; overflow: hidden; color: var(--fg); text-decoration: none; background: var(--line); }
+.item-grid .pv img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item-grid .pv.none { background: transparent; }
+.item-grid .pv .text { margin: 0; padding: 30px 10px 8px; height: 100%; box-sizing: border-box; font: 12px/1.45 system-ui, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+.item-grid .pv .text::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 32px; background: linear-gradient(transparent, var(--bg)); }
+.item-grid .pv .kind { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: .85rem; background: var(--line); }
+.item-grid .info { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px 8px; border-top: 1px solid var(--line); }
+.item-grid .info a, .item-grid .info .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
+.item-grid .info a { font-weight: 600; color: var(--fg); word-break: normal; }
+.item-grid .info .muted { font-size: .75rem; }

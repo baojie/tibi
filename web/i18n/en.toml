@@ -93,6 +93,9 @@
 "recent.load_more" = "Load more"
 "recent.empty" = "Nothing here yet."
 "recent.select_all" = "Select all"
+"recent.view" = "View"
+"recent.view_list" = "List"
+"recent.view_grid" = "Thumbnails"
 
 "e2e.note" = "End-to-end encrypted: decrypted here in your browser with the key in the link. The server cannot read it."
 "e2e.decrypting" = "Decrypting…"

@@ -92,6 +92,9 @@
 "recent.load_more" = "加载更多"
 "recent.empty" = "这里还什么都没有。"
 "recent.select_all" = "全选"
+"recent.view" = "视图"
+"recent.view_list" = "列表"
+"recent.view_grid" = "缩略图"
 
 "e2e.note" = "端到端加密：用链接里的密钥在你的浏览器中解密，服务器无法读取内容。"
 "e2e.decrypting" = "正在解密…"
