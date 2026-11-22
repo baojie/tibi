@@ -7,9 +7,9 @@
 # Builds tibi, runs throwaway servers on 127.0.0.1:18100–18103 with demo
 # data, records real terminal sessions and takes the pictures with headless
 # Chrome. Needs Node ≥ 22, Chrome, ImageMagick, ffmpeg, jq and Docker (an
-# S3 gateway for 0.0.5, the tibi image for 0.0.11). The extension (0.0.15),
-# Android (0.0.16), ACDSeeN (0.0.17) and Homebrew (0.1.2) pictures have their own scripts
-# next to this one.
+# S3 gateway for 0.0.5, the tibi image for 0.0.11). The extension (0.0.15,
+# 0.1.3), Android (0.0.16), ACDSeeN (0.0.17) and Homebrew (0.1.2) pictures
+# have their own scripts next to this one.
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$repo"

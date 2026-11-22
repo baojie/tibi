@@ -17,7 +17,7 @@ picture is cropped out.
 | versions | script | needs |
 |---|---|---|
 | all web pages and terminal sessions | `scripts/screenshots/run.sh [VERSION…]` | Node ≥ 22, Chrome, ImageMagick, ffmpeg, jq, Docker |
-| 0.0.15 Chrome extension | `scripts/screenshots/extension.sh` | Node, Chrome, ImageMagick |
+| 0.0.15, 0.1.3 Chrome extension | `scripts/screenshots/extension.sh` | Node, Chrome, ImageMagick |
 | 0.0.16 Android | `scripts/screenshots/android.sh` | a booted emulator, adb, the Android SDK |
 | 0.0.17 ACDSeeN | `scripts/screenshots/acdseen.sh` | an ACDSeeN checkout (`ACDSEEN=…`) with its virtualenv |
 | 0.1.2 Homebrew | `scripts/screenshots/brew.sh` | brew ≥ 7 (Linux), `baojie/tap` not tapped; uses a local build, nothing is downloaded |

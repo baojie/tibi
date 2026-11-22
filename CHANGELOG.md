@@ -4,9 +4,22 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
-## [Unreleased] — Hardening for agents
+## [0.1.3] — Previews in the Chrome extension; hardening for agents
+
+![a link in a toast on the page, and the extension's popup with preview cards](docs/screenshots/v0.1.3.png)
+
+### Added
+- Chrome extension popup: recent items as same-size preview cards (image
+  thumbnails, the start of a text, or the kind), 20 at a time with more
+  loaded on scrolling to the end.
+- API: items in `GET /api/v1/items` carry `excerpt`, the first 300
+  characters of a text item (not for burn-after-read).
 
 ### Changed
+- Thumbnails are made on first request and then stored with the blobs,
+  instead of at upload; images that never got one (older items) get one
+  now. `thumbnail_url` is set for every PNG, JPEG, GIF and WebP image up
+  to 100 MiB (404 when none can be made).
 - `tibi mcp` limits what an agent can publish
   ([design](docs/design/2026-11-21-security-hardening.md)):
   `upload_file` only reads files under the working directory (not when that

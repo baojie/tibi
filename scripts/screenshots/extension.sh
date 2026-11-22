@@ -1,7 +1,9 @@
 #!/bin/bash
-# The 0.0.15 picture: the Chrome extension's settings and popup, taken by
-# the extension's browser test (scripts/e2e/extension.mjs, SHOT_DIR) after
-# it has uploaded an image, a text selection, a screenshot and a big file.
+# The Chrome extension pictures, taken by the extension's browser test
+# (scripts/e2e/extension.mjs, SHOT_DIR) after it has uploaded an image, a
+# text selection, a screenshot and a big file:
+#   0.0.15  settings and popup
+#   0.1.3   the link in a toast on the page, and the popup's preview cards
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$repo"
@@ -15,6 +17,10 @@ card() { # card IN OUT: white card with a soft shadow
 }
 card "$work/ext-options.png" "$work/a.png"
 card "$work/ext-popup.png" "$work/b.png"
-magick -size 1020x470 xc:'#e9ecf1' "$work/a.png" -geometry +20+20 -composite \
-  "$work/b.png" -geometry +612+70 -composite docs/screenshots/v0.0.15.png
+magick -size 1090x640 xc:'#e9ecf1' "$work/a.png" -geometry +20+20 -composite \
+  "$work/b.png" -geometry +660+50 -composite docs/screenshots/v0.0.15.png
 echo "wrote docs/screenshots/v0.0.15.png"
+card "$work/ext-toast.png" "$work/c.png"
+magick -size 1400x660 xc:'#e9ecf1' "$work/c.png" -geometry +20+20 -composite \
+  "$work/b.png" -geometry +950+20 -composite docs/screenshots/v0.1.3.png
+echo "wrote docs/screenshots/v0.1.3.png"
