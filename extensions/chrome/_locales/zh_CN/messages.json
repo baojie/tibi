@@ -22,5 +22,8 @@
   "copy": { "message": "复制" },
   "openUpload": { "message": "上传页面" },
   "settings": { "message": "设置" },
-  "empty": { "message": "还没有上传过东西。" }
+  "empty": { "message": "还没有上传过东西。" },
+  "uploadedNotCopied": { "message": "已上传，但链接没能复制" },
+  "copiedButton": { "message": "已复制" },
+  "close": { "message": "关闭" }
 }

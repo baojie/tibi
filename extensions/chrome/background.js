@@ -1,6 +1,8 @@
 // @ts-check
 // Service worker: context menus (image → upload, selection → paste, page →
-// screenshot), clipboard via an offscreen document, notifications.
+// screenshot), clipboard via an offscreen document, and the result shown
+// twice: an in-page toast with the link (seen even when the desktop is in
+// do-not-disturb) and a desktop notification.
 import { Client } from "./lib/api.js";
 
 const msg = (k, ...s) => chrome.i18n.getMessage(k, s);
@@ -24,6 +26,85 @@ async function client() {
 
 function notify(title, message) {
   return chrome.notifications.create({ type: "basic", iconUrl: "icons/icon128.png", title, message }).catch(() => {});
+}
+
+// A toast in the page's top frame: title, the link (clickable) and a Copy
+// button, or an error. Runs in the page (activeTab, granted by the menu
+// click); fails quietly where scripts cannot run (chrome://, the web store).
+// Resolves to whether it was shown.
+async function toast(tabId, t) {
+  if (tabId === undefined || tabId < 0) return false;
+  try {
+    const [res] = await chrome.scripting.executeScript({ target: { tabId }, func: showToast, args: [t] });
+    return !!(res && res.result);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Injected into the page, so self-contained. Shadow DOM keeps the page's CSS
+ * out; a constructed stylesheet is not subject to the page's style-src CSP.
+ * @param {{title: string, url?: string, error?: string, copy: string, copied: string, close: string}} t
+ */
+function showToast(t) {
+  document.getElementById("tibi-toast")?.remove();
+  const host = document.createElement("div");
+  host.id = "tibi-toast";
+  const root = host.attachShadow({ mode: "open" });
+  const css = new CSSStyleSheet();
+  css.replaceSync(`
+    :host { all: initial; position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; }
+    .box { --fg: #1d1d1f; --muted: #6e6e73; --bg: #fff; --accent: #8a3b12; --line: #e5e5ea; --err: #b3261e;
+      font: 14px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
+      border-left: 4px solid var(--accent); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+      padding: 10px 12px; width: min(360px, calc(100vw - 32px)); box-sizing: border-box; }
+    .box.error { border-left-color: var(--err); }
+    @media (prefers-color-scheme: dark) { .box { --fg: #f2f2f7; --muted: #a1a1a6; --bg: #1c1c1e; --accent: #e8925f; --line: #3a3a3c; --err: #f2b8b5; } }
+    .head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+    .head span { flex: 1; }
+    .x { all: unset; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 2px; }
+    .row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    a { flex: 1; min-width: 0; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .copy { all: unset; cursor: pointer; font-size: 13px; border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 2px 10px; }
+    .msg { margin-top: 6px; color: var(--err); overflow-wrap: anywhere; }`);
+  root.adoptedStyleSheets = [css];
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+  const box = el("div", t.error ? "box error" : "box");
+  box.setAttribute("role", "status");
+  const head = el("div", "head");
+  const x = el("button", "x", "×");
+  x.title = t.close;
+  x.addEventListener("click", () => host.remove());
+  head.append(el("span", "", t.title), x);
+  box.append(head);
+  if (t.url) {
+    const row = el("div", "row");
+    const a = el("a", "", t.url);
+    a.href = t.url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    const b = el("button", "copy", t.copy);
+    b.addEventListener("click", () => navigator.clipboard.writeText(t.url || "").then(() => { b.textContent = t.copied; }, () => {}));
+    row.append(a, b);
+    box.append(row);
+  }
+  if (t.error) box.append(el("div", "msg", t.error));
+  root.append(box);
+  (document.body || document.documentElement).append(host);
+  // Gone after 10 s unless the pointer is on it.
+  let timer = setTimeout(() => host.remove(), 10000);
+  host.addEventListener("mouseenter", () => clearTimeout(timer));
+  host.addEventListener("mouseleave", () => { timer = setTimeout(() => host.remove(), 4000); });
+  return true;
+}
+
+// Toast + desktop notification for one result.
+async function report(tabId, t) {
+  const labels = { copy: msg("copy"), copied: msg("copiedButton"), close: msg("close") };
+  const shown = await toast(tabId, { ...t, ...labels });
+  notify(t.title, t.url || t.error || "");
+  return shown;
 }
 
 // Clipboard: service workers have no DOM, so an offscreen document copies.
@@ -115,7 +196,7 @@ async function dataURLBlob(u) {
 async function handle(info, tab) {
   const cl = await client();
   if (!cl) {
-    notify("tibi", msg("notConfigured"));
+    await report(tab && tab.id, { title: "tibi", error: msg("notConfigured") });
     chrome.runtime.openOptionsPage();
     return { error: "not configured" };
   }
@@ -132,18 +213,28 @@ async function handle(info, tab) {
       const title = tab && tab.title ? tab.title.slice(0, 200) : "";
       item = await cl.upload(new Blob([text], { type: "text/plain; charset=utf-8" }), { ...base, kind: "text", title });
     } else if (info.menuItemId === "screenshot") {
+      // An earlier toast must not end up in the screenshot.
+      if (tab && tab.id !== undefined) {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => {
+          const h = document.getElementById("tibi-toast");
+          if (!h) return;
+          h.remove();
+          return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        } }).catch(() => {});
+      }
       const shot = await chrome.tabs.captureVisibleTab(tab ? tab.windowId : chrome.windows.WINDOW_ID_CURRENT, { format: "png" });
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
       item = await cl.upload(await dataURLBlob(shot), { ...base, filename: "screenshot-" + stamp + ".png" });
     } else {
       return { error: "unknown action" };
     }
-    await copy(item.url);
-    notify(msg("copied"), item.url);
-    return { url: item.url, id: item.id, kind: item.kind };
+    let copied = false;
+    try { copied = !!(await copy(item.url)); } catch {}
+    const toasted = await report(tab && tab.id, { title: msg(copied ? "copied" : "uploadedNotCopied"), url: item.url });
+    return { url: item.url, id: item.id, kind: item.kind, copied, toasted };
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
-    notify(msg("failed"), m);
+    await report(tab && tab.id, { title: msg("failed"), error: m });
     return { error: m };
   }
 }

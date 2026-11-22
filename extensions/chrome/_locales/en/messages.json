@@ -22,5 +22,8 @@
   "copy": { "message": "Copy" },
   "openUpload": { "message": "Upload page" },
   "settings": { "message": "Settings" },
-  "empty": { "message": "Nothing uploaded yet." }
+  "empty": { "message": "Nothing uploaded yet." },
+  "uploadedNotCopied": { "message": "Uploaded, but the link could not be copied" },
+  "copiedButton": { "message": "Copied" },
+  "close": { "message": "Close" }
 }

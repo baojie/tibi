@@ -138,6 +138,11 @@ try {
     await send("Page.bringToFront", {}, page.sessionId);
     const copied = await evalIn(page.sessionId, `(async () => { window.focus(); return navigator.clipboard.readText(); })()`);
     if (copied !== r.url) fail("clipboard holds " + JSON.stringify(copied) + ", not " + r.url);
+    if (!r.copied) fail("handler says the copy failed");
+    // The in-page toast shows the link (desktop notifications may be muted).
+    const t = await evalIn(page.sessionId, `(() => { const r = document.getElementById("tibi-toast")?.shadowRoot; const a = r && r.querySelector("a");
+      return r && { href: a && a.href, title: r.querySelector(".head span").textContent }; })()`);
+    if (!r.toasted || !t || t.href !== r.url || t.title !== "Link copied") fail("toast: " + JSON.stringify(t) + " for " + r.url);
     return r;
   };
   const item = async (id) => (await fetch(good.base + "/api/v1/items/" + id, { headers: { Authorization: "Bearer " + good.token } })).json();
@@ -148,6 +153,10 @@ try {
   const im = await item(img.id);
   if (im.kind !== "image" || im.filename !== "cat.png" || im.source !== "chrome" || !(await raw(im.raw_url)).equals(png)) fail("image item: " + JSON.stringify(im));
   console.log("OK: image →", img.url, "(copied; kind image, cat.png, source chrome)");
+  if (process.env.SHOT_DIR) { // the toast, for a human look
+    const { data } = await send("Page.captureScreenshot", { format: "png" }, page.sessionId);
+    writeFileSync(join(process.env.SHOT_DIR, "ext-toast.png"), Buffer.from(data, "base64"));
+  }
 
   // 3. Selected text → paste (line breaks kept).
   await evalIn(page.sessionId, `(() => { const r = document.createRange(); r.selectNodeContents(document.getElementById("p")); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
@@ -157,11 +166,28 @@ try {
   if (tx.kind !== "text" || body !== "first line\nsecond line" || tx.title !== "Test page") fail("text item: " + JSON.stringify(tx) + " " + JSON.stringify(body));
   console.log("OK: selection →", txt.url, "(copied; line breaks kept, titled with the page)");
 
-  // 4. Screenshot of the visible tab.
+  // 4. Screenshot of the visible tab (the toast from step 3 is removed first).
   const shot = await run({ menuItemId: "screenshot", pageUrl: siteURL + "/" });
   const sh = await item(shot.id);
   if (sh.kind !== "image" || sh.mime !== "image/png" || !(sh.width > 100) || !/^screenshot-.*\.png$/.test(sh.filename)) fail("screenshot item: " + JSON.stringify(sh));
-  console.log(`OK: screenshot → ${shot.url} (${sh.width}x${sh.height} PNG)`);
+  // Where the toast sits (bottom right) the page's blue must show.
+  const px = await evalIn(swS, `(async () => {
+    const b = await createImageBitmap(await (await fetch("data:image/png;base64,${(await raw(sh.raw_url)).toString("base64")}")).blob());
+    const c = new OffscreenCanvas(b.width, b.height).getContext("2d");
+    c.drawImage(b, 0, 0);
+    return [...c.getImageData(b.width - 60, b.height - 40, 1, 1).data];
+  })()`);
+  if (Math.abs(px[0] - 0x22) > 8 || Math.abs(px[1] - 0x66) > 8 || Math.abs(px[2] - 0xaa) > 8) fail("screenshot shows the toast: pixel " + px);
+  console.log(`OK: screenshot → ${shot.url} (${sh.width}x${sh.height} PNG, no toast in it)`);
+
+  // 4b. A failed upload shows the error in the toast.
+  await grant();
+  const tabNow = JSON.stringify(await evalIn(swS, `chrome.tabs.query({ active: true }).then((t) => t.find((x) => x.url && x.url.startsWith("${siteURL}")))`));
+  const bad = await evalIn(swS, `self.tibiHandle({ menuItemId: "image", srcUrl: "http://127.0.0.1:9/missing.png", pageUrl: "${siteURL}/" }, ${tabNow})`);
+  const et = await evalIn(page.sessionId, `(() => { const r = document.getElementById("tibi-toast")?.shadowRoot;
+    return r && { title: r.querySelector(".head span").textContent, msg: r.querySelector(".msg")?.textContent, link: !!r.querySelector("a") }; })()`);
+  if (!bad.error || !et || et.title !== "Upload failed" || !et.msg || et.link) fail("error toast: " + JSON.stringify({ bad, et }));
+  console.log("OK: failed upload → error toast:", et.msg);
 
   // 5. A large file goes through tus (cross-origin PATCH/HEAD, exposed headers).
   const big = await evalIn(swS, `(async () => {

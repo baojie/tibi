@@ -20,7 +20,14 @@ between minor versions, but the public URL scheme is frozen from 0.0.1.
 - `tibi mcp` warns on stderr when its token has scopes an agent does not
   need (`admin`, `read_private`, `delete` without `--allow-delete`).
 
+- Chrome extension: the link now also appears in a toast on the page
+  (clickable, with a Copy button), so it is seen when desktop notifications
+  are muted (do-not-disturb); upload errors show there too. Screenshots are
+  taken without an earlier toast in them.
+
 ### Fixed
+- Chrome extension: when copying the link failed, the notification still
+  said "Link copied"; it now says the item was uploaded but not copied.
 - Search returned the matching line of a burn-after-read paste to any
   upload token, reading it without consuming it. Burn-after-read content is
   no longer indexed (migration 0007 removes what was), and the API list and

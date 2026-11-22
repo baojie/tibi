@@ -79,7 +79,10 @@ searches and bulk-deletes your items.
   visible area);
 - the toolbar popup lists recent items with Copy buttons.
 
-The link is copied and shown in a notification. Uploads carry
+The link is copied and shown in a toast at the bottom right of the page
+(clickable, with a Copy button; it stays while the pointer is on it), and in
+a desktop notification — the toast is what you see when the desktop is in
+do-not-disturb. Errors show there too. Uploads carry
 `source=chrome` and `meta.page_url`; files over 20 MiB use tus.
 
 Install: `chrome://extensions` → Developer mode → **Load unpacked** →
