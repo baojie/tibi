@@ -58,6 +58,9 @@ func (a *App) uploadEncrypted(ctx context.Context, cl *client.Client, content []
 	if o.md || o.raw {
 		return nil, "", nil, usageError{"--md and --raw do not apply to encrypted items (the raw bytes are ciphertext)"}
 	}
+	if o.sourceURL != "" {
+		return nil, "", nil, usageError{"--source-url is stored unencrypted: leave it out with --encrypt"}
+	}
 	if len(content) > maxEncryptBytes {
 		return nil, "", nil, fmt.Errorf("too large to encrypt (%d bytes, limit %d)", len(content), maxEncryptBytes)
 	}

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -98,5 +99,48 @@ func TestExpiredAndDeletedHidden(t *testing.T) {
 	s.DB().Exec(`UPDATE items SET deleted_at = 1 WHERE id = ?`, it2.ID)
 	if _, err := s.GetItem(ctx, it2.ID); err != ErrNotFound {
 		t.Fatalf("deleted item visible: %v", err)
+	}
+}
+
+// Migration 0008 takes source_url from the page_url Chrome kept in meta.
+func TestMigrationSourceURL(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	_, tok, err := s.CreateToken(ctx, "a", []string{ScopeUpload}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	add := func(meta string) string {
+		it := &Item{Kind: KindText, Mime: "text/plain", Ext: "txt", SHA256: "aa" + strings.Repeat("0", 62), Meta: meta, TokenID: tok.ID}
+		if err := s.CreateItem(ctx, it); err != nil {
+			t.Fatal(err)
+		}
+		return it.ID
+	}
+	page := add(`{"page_url":"https://example.com/post?id=1"}`)
+	bad := add(`not json`)
+	js := add(`{"page_url":"javascript:alert(1)"}`)
+	num := add(`{"page_url":42}`)
+	none := add("")
+	// Back to schema 7, as an older server left it.
+	for _, q := range []string{`ALTER TABLE items DROP COLUMN source_url`, `DELETE FROM schema_migrations WHERE version = 8`} {
+		if _, err := s.DB().ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	if s, err = Open(p); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for id, want := range map[string]string{page: "https://example.com/post?id=1", bad: "", js: "", num: "", none: ""} {
+		it, err := s.GetItem(ctx, id)
+		if err != nil || it.SourceURL != want {
+			t.Errorf("%s: source_url %q, want %q (%v)", id, it.SourceURL, want, err)
+		}
 	}
 }

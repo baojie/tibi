@@ -42,6 +42,7 @@ async function failure(r) {
  * @property {string} [expires]
  * @property {string} [visibility]
  * @property {string} [source]
+ * @property {string} [source_url] - where it came from (http(s), at most 2048 bytes)
  * @property {Object<string, string>} [meta]
  */
 

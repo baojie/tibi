@@ -65,7 +65,7 @@ func (s *Server) setupResumable() error {
 }
 
 // tusOptionKeys are the Upload-Metadata keys tibi understands.
-var tusOptionKeys = []string{"filename", "title", "kind", "lang", "keep_meta", "expires", "visibility", "slug", "burn_after_read", "source", "meta"}
+var tusOptionKeys = []string{"filename", "title", "kind", "lang", "keep_meta", "expires", "visibility", "slug", "burn_after_read", "source", "source_url", "meta"}
 
 func (s *Server) tusOptions(ctx context.Context, meta map[string]string) (ingest.Options, error) {
 	r := (&http.Request{Header: http.Header{}}).WithContext(ctx)
@@ -227,7 +227,7 @@ func (s *Server) handleUploadItem(w http.ResponseWriter, r *http.Request) {
 			apiError(w, http.StatusNotFound, "not_found", "the uploaded item no longer exists")
 			return
 		}
-		writeJSON(w, http.StatusOK, s.itemJSON(it))
+		writeJSON(w, http.StatusOK, s.apiItemJSON(r, it))
 	case u.Error != "":
 		apiError(w, http.StatusBadRequest, "bad_request", "upload could not be stored: "+u.Error)
 	default:

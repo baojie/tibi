@@ -103,3 +103,5 @@ main:has(.item-collection) { max-width: 1200px; }
 .item-grid .info a, .item-grid .info .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
 .item-grid .info a { font-weight: 600; color: var(--fg); word-break: normal; }
 .item-grid .info .muted { font-size: .75rem; }
+.item-list a.src, .item-grid .info a.src { font-weight: normal; font-size: .8rem; color: var(--muted); }
+.item-grid .info a.src { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .75rem; }

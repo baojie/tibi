@@ -43,9 +43,10 @@ type tool struct {
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 
 var (
-	expiresProp = str("How long the link works: e.g. 10m, 1h, 7d, 30d, or never. Default: " + expiresDefaultMark + ".")
-	privateProp = map[string]any{"type": "boolean", "description": "Only viewable with a token that can read private items (or a share link). Default false: anyone with the URL can view."}
-	titleProp   = str("Title shown on the page.")
+	expiresProp   = str("How long the link works: e.g. 10m, 1h, 7d, 30d, or never. Default: " + expiresDefaultMark + ".")
+	sourceURLProp = str("Where the content came from, if it came from the web (http(s) URL). Stored for the owner only; not shown to people opening the link. Not with encrypt.")
+	privateProp   = map[string]any{"type": "boolean", "description": "Only viewable with a token that can read private items (or a share link). Default false: anyone with the URL can view."}
+	titleProp     = str("Title shown on the page.")
 )
 
 // expiresDefaultMark is replaced in tool descriptions by the actual default.
@@ -64,7 +65,7 @@ var tools = []tool{
 			"directory and directories the user allowed can be uploaded; keys, credentials and hidden files never.",
 		InputSchema: map[string]any{
 			"type":       "object",
-			"properties": map[string]any{"path": str("Path of the local file (absolute, or relative to the working directory)."), "title": titleProp, "expires": expiresProp, "private": privateProp},
+			"properties": map[string]any{"path": str("Path of the local file (absolute, or relative to the working directory)."), "title": titleProp, "expires": expiresProp, "private": privateProp, "source_url": sourceURLProp},
 			"required":   []string{"path"},
 		},
 		Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": true},
@@ -78,7 +79,7 @@ var tools = []tool{
 			"properties": map[string]any{
 				"text":  str("The text or code."),
 				"lang":  str("Language for highlighting, e.g. go, python, markdown, diff (default: detected)."),
-				"title": titleProp, "expires": expiresProp, "private": privateProp,
+				"title": titleProp, "expires": expiresProp, "private": privateProp, "source_url": sourceURLProp,
 				"encrypt": map[string]any{"type": "boolean", "description": "End-to-end encrypt: the server stores only ciphertext and the returned link carries the key after #k=. Use for secrets (credentials, logs with personal data). The title and lang are NOT encrypted: keep secrets out of them. The returned link contains the key, so treat it as the secret itself. Default false."},
 			},
 			"required": []string{"text"},
@@ -188,6 +189,7 @@ type args struct {
 	Title   string `json:"title"`
 	Expires string `json:"expires"`
 	Private bool   `json:"private"`
+	Source  string `json:"source_url"`
 	Encrypt bool   `json:"encrypt"`
 	Limit   int    `json:"limit"`
 	Kind    string `json:"kind"`
@@ -228,10 +230,13 @@ func (t *Toolbox) Call(ctx context.Context, name string, raw json.RawMessage) (r
 			return fail("text is empty")
 		}
 		if a.Encrypt {
+			if a.Source != "" {
+				return fail("source_url is stored unencrypted: leave it out with encrypt")
+			}
 			return pasteEncrypted(ctx, cl, a)
 		}
 		it, _, err := cl.Upload(ctx, strings.NewReader(a.Text), int64(len(a.Text)), client.UploadOptions{
-			Title: a.Title, Lang: a.Lang, Kind: "text", Expires: a.Expires, Private: a.Private, Source: "mcp",
+			Title: a.Title, Lang: a.Lang, Kind: "text", Expires: a.Expires, Private: a.Private, Source: "mcp", SourceURL: a.Source,
 		})
 		if err != nil {
 			return apiFail("paste", err)
@@ -297,7 +302,7 @@ func (t *Toolbox) uploadFile(ctx context.Context, cl *client.Client, a args) res
 		return fail("%s is too large (%d bytes, limit %d)", a.Path, st.Size(), t.MaxFileBytes)
 	}
 	it, _, err := cl.Upload(ctx, f, st.Size(), client.UploadOptions{
-		Filename: filepath.Base(p), Title: a.Title, Expires: a.Expires, Private: a.Private, Source: "mcp",
+		Filename: filepath.Base(p), Title: a.Title, Expires: a.Expires, Private: a.Private, Source: "mcp", SourceURL: a.Source,
 	})
 	if err != nil {
 		return apiFail("upload", err)

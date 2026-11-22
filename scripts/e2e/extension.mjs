@@ -173,8 +173,8 @@ try {
   // 2. Right-click image → upload, link in clipboard.
   const img = await run({ menuItemId: "image", srcUrl: siteURL + "/sky.png", pageUrl: siteURL + "/" });
   const im = await item(img.id);
-  if (im.kind !== "image" || im.filename !== "sky.png" || im.source !== "chrome" || !(await raw(im.raw_url)).equals(png)) fail("image item: " + JSON.stringify(im));
-  console.log("OK: image →", img.url, "(copied; kind image, sky.png, source chrome)");
+  if (im.kind !== "image" || im.filename !== "sky.png" || im.source !== "chrome" || im.source_url !== siteURL + "/sky.png" || !(await raw(im.raw_url)).equals(png)) fail("image item: " + JSON.stringify(im));
+  console.log("OK: image →", img.url, "(copied; kind image, sky.png, source chrome, source_url the image)");
   if (process.env.SHOT_DIR) { // the toast, for a human look
     const { data } = await send("Page.captureScreenshot", { format: "png" }, page.sessionId);
     writeFileSync(join(process.env.SHOT_DIR, "ext-toast.png"), Buffer.from(data, "base64"));
@@ -185,13 +185,13 @@ try {
   const txt = await run({ menuItemId: "selection", selectionText: "first line second line", pageUrl: siteURL + "/" });
   const tx = await item(txt.id);
   const body = (await raw(tx.raw_url)).toString();
-  if (tx.kind !== "text" || body !== "first line\nsecond line" || tx.title !== "Test page") fail("text item: " + JSON.stringify(tx) + " " + JSON.stringify(body));
+  if (tx.kind !== "text" || body !== "first line\nsecond line" || tx.title !== "Test page" || tx.source_url !== siteURL + "/") fail("text item: " + JSON.stringify(tx) + " " + JSON.stringify(body));
   console.log("OK: selection →", txt.url, "(copied; line breaks kept, titled with the page)");
 
   // 4. Screenshot of the visible tab (the toast from step 3 is removed first).
   const shot = await run({ menuItemId: "screenshot", pageUrl: siteURL + "/" });
   const sh = await item(shot.id);
-  if (sh.kind !== "image" || sh.mime !== "image/png" || !(sh.width > 100) || !/^screenshot-.*\.png$/.test(sh.filename)) fail("screenshot item: " + JSON.stringify(sh));
+  if (sh.kind !== "image" || sh.mime !== "image/png" || !(sh.width > 100) || !/^screenshot-.*\.png$/.test(sh.filename) || sh.source_url !== siteURL + "/") fail("screenshot item: " + JSON.stringify(sh));
   // Where the toast sits (bottom right) the page's blue must show.
   const px = await evalIn(swS, `(async () => {
     const b = await createImageBitmap(await (await fetch("data:image/png;base64,${(await raw(sh.raw_url)).toString("base64")}")).blob());

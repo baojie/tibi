@@ -19,6 +19,7 @@ cat log.txt | tibi             # stdin
 tibi paste -l python           # $EDITOR, then a highlighted paste
 tibi clip                      # whatever is on the clipboard (image first)
 tibi up --album *.jpg          # one collection
+tibi up --source-url https://example.com/post/1 chart.png   # remember where it came from
 tibi ls · tibi search WORDS · tibi rm ID · tibi share ID --ttl 1d
 ```
 
@@ -33,6 +34,14 @@ in the browser; the file name stays inside the encryption.
 cat .env | tibi paste --encrypt -e 1d     # → https://tibi.example.com/aZ3k9QxP#k=…
 tibi up --encrypt --password contract.pdf
 ```
+
+Every client records where an item came from when it knows (`source_url`):
+the Chrome extension the image's address or the page, the upload page the
+address of an image dragged or copied from another page, Android the link a
+browser shares along, the CLI `--source-url`. Only you see it — the API
+returns it to the token that uploaded the item and to `read_private`
+tokens, Recent items shows it, `tibi info` prints it — never the shared page.
+It is stored unencrypted, so `--encrypt` refuses it.
 
 Files over 20 MiB go up in resumable chunks with a progress line. If the
 upload is interrupted (network, Ctrl-C, laptop lid), run the same command
@@ -84,7 +93,8 @@ The link is copied and shown in a toast at the bottom right of the page
 (clickable, with a Copy button; it stays while the pointer is on it), and in
 a desktop notification — the toast is what you see when the desktop is in
 do-not-disturb. Errors show there too. Uploads carry
-`source=chrome` and `meta.page_url`; files over 20 MiB use tus.
+`source=chrome` and `source_url` (the image's address, or the page for text
+and screenshots); files over 20 MiB use tus.
 
 Install: `chrome://extensions` → Developer mode → **Load unpacked** →
 choose `extensions/chrome`. In the options page enter the server URL and a
@@ -107,7 +117,8 @@ the link is also copied, a notification offers **Copy** and **Share**, and
 the app's main screen keeps a list of recent links. Several items shared at once become one
 collection. A Quick Settings tile, **Upload screenshot**, sends the newest
 screenshot. HEIC photos are converted by the server. Uploads carry
-`source=android`.
+`source=android`, and `source_url` when the share brings a link (a browser
+sharing an image or a page).
 
 Build and install (JDK 17+ and the Android SDK; or take the APK artifact
 of a CI run):
@@ -182,8 +193,8 @@ tools:
 
 | tool | does |
 |---|---|
-| `upload_file(path, title?, expires?, private?)` | upload a local file, return its URL (and Markdown for images) |
-| `paste_text(text, lang?, title?, expires?, private?, encrypt?)` | publish text or code as a highlighted paste; `encrypt` makes it end-to-end encrypted |
+| `upload_file(path, title?, expires?, private?, source_url?)` | upload a local file, return its URL (and Markdown for images) |
+| `paste_text(text, lang?, title?, expires?, private?, source_url?, encrypt?)` | publish text or code as a highlighted paste; `encrypt` makes it end-to-end encrypted |
 | `list_items(limit?, kind?)` | recent uploads |
 | `search_items(query)` | full-text search |
 | `delete_item(id)` | delete by ID or URL; only with `--allow-delete` |

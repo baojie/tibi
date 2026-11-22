@@ -65,6 +65,7 @@ type Options struct {
 	ForkedFrom string
 	KeepMeta   bool
 	Source     string
+	SourceURL  string // validated by the server
 	Meta       string
 	ExpiresAt  *int64
 	TokenID    int64
@@ -187,7 +188,7 @@ func (p *Pipeline) prepareEncrypted(pr *Prepared, n int64, o Options) (*Prepared
 	it := &store.Item{
 		Kind: store.KindEncrypted, Mime: "application/octet-stream", Ext: "bin", Size: n,
 		Title: o.Title, Lang: lang, Visibility: o.Visibility, Slug: o.Slug, BurnAfterRead: o.Burn,
-		Source: o.Source, Meta: o.Meta, TokenID: o.TokenID, ExpiresAt: o.ExpiresAt, ForkedFrom: o.ForkedFrom,
+		Source: o.Source, SourceURL: o.SourceURL, Meta: o.Meta, TokenID: o.TokenID, ExpiresAt: o.ExpiresAt, ForkedFrom: o.ForkedFrom,
 	}
 	h := sha256.New()
 	if _, err := io.Copy(h, io.NewSectionReader(pr.file, 0, n)); err != nil {
@@ -315,6 +316,7 @@ func (p *Pipeline) prepareSpooled(ctx context.Context, pr *Prepared, n int64, o 
 		Slug:          o.Slug,
 		BurnAfterRead: o.Burn,
 		Source:        o.Source,
+		SourceURL:     o.SourceURL,
 		Meta:          o.Meta,
 		TokenID:       o.TokenID,
 		ExpiresAt:     o.ExpiresAt,

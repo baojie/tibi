@@ -73,6 +73,17 @@
     if (it.snippet) flags.push("“" + it.snippet + "”");
     meta.textContent = flags.join(" · ");
     info.appendChild(meta);
+    if (it.source_url) { // where it came from (only the uploader gets this)
+      var src = el("a", "src");
+      src.href = it.source_url;
+      src.target = "_blank";
+      src.rel = "noopener noreferrer";
+      src.title = it.source_url;
+      var host = it.source_url;
+      try { host = new URL(it.source_url).host; } catch (e) {}
+      src.textContent = t("recent.source") + ": " + host;
+      info.appendChild(src);
+    }
     li.appendChild(info);
     return li;
   }

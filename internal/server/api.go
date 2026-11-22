@@ -8,6 +8,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -169,6 +170,7 @@ func (s *Server) uploadOptions(r *http.Request, get func(string) string) (ingest
 		Lang:       get("lang"),
 		KeepMeta:   truthy(get("keep_meta")),
 		Source:     get("source"),
+		SourceURL:  get("source_url"),
 		Meta:       get("meta"),
 		Slug:       strings.ToLower(get("slug")),
 		Burn:       truthy(get("burn_after_read")),
@@ -184,6 +186,9 @@ func (s *Server) uploadOptions(r *http.Request, get func(string) string) (ingest
 	if o.Slug != "" && !store.ValidSlug(o.Slug) {
 		return o, &ingest.BadRequestError{Msg: store.ErrSlugInvalid.Error()}
 	}
+	if o.SourceURL != "" && !validSourceURL(o.SourceURL) {
+		return o, &ingest.BadRequestError{Msg: "source_url must be an http(s) URL of at most 2048 bytes"}
+	}
 	exp := get("expires")
 	if exp == "" {
 		exp = s.cfg.DefaultExpires
@@ -194,6 +199,15 @@ func (s *Server) uploadOptions(r *http.Request, get func(string) string) (ingest
 	}
 	o.ExpiresAt = at
 	return o, nil
+}
+
+// validSourceURL accepts absolute http(s) URLs without control characters.
+func validSourceURL(v string) bool {
+	if len(v) > 2048 || strings.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return false
+	}
+	u, err := url.Parse(v)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // expiresAt converts an expiry like "7d" into an absolute unix time
@@ -484,7 +498,7 @@ func (s *Server) finishUpload(w http.ResponseWriter, r *http.Request, prepared [
 			return
 		}
 		metrics.UploadBytes.Add(p.Item.Size)
-		out = append(out, s.itemJSON(p.Item))
+		out = append(out, s.apiItemJSON(r, p.Item))
 	}
 	switch {
 	case coll != nil:
@@ -530,9 +544,21 @@ type ItemJSON struct {
 	ForkedFrom    string `json:"forked_from,omitempty"`
 	BurnAfterRead bool   `json:"burn_after_read"`
 	Source        string `json:"source,omitempty"`
+	SourceURL     string `json:"source_url,omitempty"`
 	ViewCount     int64  `json:"view_count"`
 	ExpiresAt     *int64 `json:"expires_at"`
 	CreatedAt     int64  `json:"created_at"`
+}
+
+// apiItemJSON is itemJSON for API answers: it adds what only the item's
+// uploader (and read_private tokens) may see, like where it came from.
+// itemJSON alone also feeds public pages.
+func (s *Server) apiItemJSON(r *http.Request, it *store.Item) ItemJSON {
+	j := s.itemJSON(it)
+	if p := privateAccess(r); p.All || (p.OwnToken != 0 && it.TokenID == p.OwnToken) {
+		j.SourceURL = it.SourceURL
+	}
+	return j
 }
 
 func (s *Server) itemJSON(it *store.Item) ItemJSON {

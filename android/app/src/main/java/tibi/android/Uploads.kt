@@ -19,8 +19,9 @@ import java.util.concurrent.TimeUnit
 
 /** Something to upload: a shared file (content URI) or shared text. */
 sealed class Source {
-    data class Content(val uri: Uri, val mime: String?) : Source()
-    data class Text(val text: String, val title: String?) : Source()
+    /** sourceUrl: where it came from, if the share said (see webUrl). */
+    data class Content(val uri: Uri, val mime: String?, val sourceUrl: String? = null) : Source()
+    data class Text(val text: String, val title: String?, val sourceUrl: String? = null) : Source()
 }
 
 object Uploads {
@@ -44,14 +45,14 @@ object Uploads {
             when (s) {
                 is Source.Text -> {
                     File(dir, "$i.txt").writeText(s.text)
-                    Entry("$i.txt", "", "text/plain", kind = "text", title = s.title)
+                    Entry("$i.txt", "", "text/plain", kind = "text", title = s.title, sourceUrl = s.sourceUrl)
                 }
                 is Source.Content -> {
                     val mime = s.mime ?: ctx.contentResolver.getType(s.uri) ?: "application/octet-stream"
                     val name = displayName(ctx, s.uri) ?: defaultName(i, mime)
                     val f = File(dir, "$i.bin")
                     ctx.contentResolver.openInputStream(s.uri)!!.use { inp -> f.outputStream().use { inp.copyTo(it) } }
-                    Entry(f.name, name, mime)
+                    Entry(f.name, name, mime, sourceUrl = s.sourceUrl)
                 }
             }
         }

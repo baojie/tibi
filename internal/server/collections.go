@@ -95,7 +95,7 @@ func (s *Server) writeCollection(w http.ResponseWriter, r *http.Request, c *stor
 	j.Items = make([]ItemJSON, 0, len(items))
 	for _, it := range items {
 		if canSee(r, it) { // someone else's private item in a shared collection
-			j.Items = append(j.Items, s.itemJSON(it))
+			j.Items = append(j.Items, s.apiItemJSON(r, it))
 		}
 	}
 	writeJSON(w, status, j)
@@ -303,5 +303,5 @@ func (s *Server) handleFork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	metrics.UploadBytes.Add(p.Item.Size)
-	writeJSON(w, http.StatusCreated, s.itemJSON(p.Item))
+	writeJSON(w, http.StatusCreated, s.apiItemJSON(r, p.Item))
 }

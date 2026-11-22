@@ -56,6 +56,7 @@ type Item struct {
 	ForkedFrom    string
 	BurnAfterRead bool
 	Source        string
+	SourceURL     string // where it came from; only for its uploader (see server)
 	Meta          string
 	TokenID       int64
 	ViewCount     int64
@@ -117,13 +118,13 @@ func (s *Store) CreateItem(ctx context.Context, it *Item) error {
 			res, err := tx.ExecContext(ctx, `INSERT INTO items
 				(id, kind, mime, orig_mime, filename, ext, size, sha256, title, lang, charset, width, height,
 				 duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, created_at, expires_at,
-				 collection_id, position, forked_from)
-				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				 collection_id, position, forked_from, source_url)
+				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 				it.ID, it.Kind, it.Mime, nullStr(it.OrigMime), nullStr(it.Filename), it.Ext, it.Size, it.SHA256, nullStr(it.Title),
 				nullStr(it.Lang), nullStr(it.Charset), nullInt(it.Width), nullInt(it.Height),
 				nullInt64(it.DurationMS), it.Thumb, it.Visibility,
 				nullStr(it.Slug), it.BurnAfterRead, nullStr(it.Source), nullStr(it.Meta), it.TokenID,
-				it.CreatedAt, nullInt64(it.ExpiresAt), nullStr(it.CollectionID), nullInt(it.Position), nullStr(it.ForkedFrom))
+				it.CreatedAt, nullInt64(it.ExpiresAt), nullStr(it.CollectionID), nullInt(it.Position), nullStr(it.ForkedFrom), nullStr(it.SourceURL))
 			if err != nil {
 				return err
 			}
@@ -171,20 +172,20 @@ func (s *Store) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 
 const itemCols = `id, kind, mime, orig_mime, filename, ext, size, sha256, title, lang, charset, width, height,
 	duration_ms, thumb, visibility, slug, burn_after_read, source, meta, token_id, view_count, created_at, expires_at, deleted_at,
-	collection_id, position, forked_from, bytes_served`
+	collection_id, position, forked_from, bytes_served, source_url`
 
 func scanItem(sc interface{ Scan(...any) error }) (*Item, error) {
 	var it Item
-	var origMime, filename, title, lang, charset, slug, source, meta, coll, forked sql.NullString
+	var origMime, filename, title, lang, charset, slug, source, meta, coll, forked, srcURL sql.NullString
 	var width, height, dur, exp, del, pos sql.NullInt64
 	err := sc.Scan(&it.ID, &it.Kind, &it.Mime, &origMime, &filename, &it.Ext, &it.Size, &it.SHA256, &title,
 		&lang, &charset, &width, &height, &dur, &it.Thumb, &it.Visibility, &slug, &it.BurnAfterRead, &source, &meta,
-		&it.TokenID, &it.ViewCount, &it.CreatedAt, &exp, &del, &coll, &pos, &forked, &it.BytesServed)
+		&it.TokenID, &it.ViewCount, &it.CreatedAt, &exp, &del, &coll, &pos, &forked, &it.BytesServed, &srcURL)
 	if err != nil {
 		return nil, err
 	}
 	it.Filename, it.Title, it.Lang, it.Charset = filename.String, title.String, lang.String, charset.String
-	it.Slug, it.Source, it.Meta = slug.String, source.String, meta.String
+	it.Slug, it.Source, it.Meta, it.SourceURL = slug.String, source.String, meta.String, srcURL.String
 	it.OrigMime = origMime.String
 	it.CollectionID, it.ForkedFrom = coll.String, forked.String
 	if pos.Valid {

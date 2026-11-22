@@ -84,7 +84,26 @@
   }
   function fail(err) { status.textContent = t("upload.failed", err.message); }
 
-  function uploadFiles(files) {
+  // Where a single dropped or pasted file came from: an image dragged from
+  // another page brings its address (text/uri-list); one copied with "Copy
+  // image" brings <img src> (text/html). Only http(s), as the API accepts.
+  function webURL(u) {
+    u = (u || "").trim();
+    return /^https?:\/\//i.test(u) && new TextEncoder().encode(u).length <= 2048 ? u : "";
+  }
+  function sourceOf(dt) {
+    if (!dt || dt.files.length !== 1) return "";
+    var list = (dt.getData("text/uri-list") || "").split(/\r?\n/).filter(function (l) { return l && l[0] !== "#"; });
+    if (list.length === 1 && webURL(list[0])) return webURL(list[0]);
+    var html = dt.getData("text/html");
+    if (html) {
+      var img = new DOMParser().parseFromString(html, "text/html").querySelector("img[src]");
+      if (img) return webURL(img.getAttribute("src"));
+    }
+    return "";
+  }
+
+  function uploadFiles(files, sourceURL) {
     files = Array.prototype.slice.call(files);
     if (!files.length) return;
     if (document.getElementById("opt-album").checked && files.length > 1) {
@@ -98,6 +117,7 @@
       return p.then(function () {
         var f = new FormData();
         options(f);
+        if (sourceURL) f.append("source_url", sourceURL);
         f.append("file", file, file.name || "pasted.png");
         return send(f, file.name || "image").then(show, fail);
       });
@@ -113,7 +133,7 @@
   ["dragleave", "drop"].forEach(function (ev) {
     zone.addEventListener(ev, function () { zone.classList.remove("over"); });
   });
-  zone.addEventListener("drop", function (e) { e.preventDefault(); uploadFiles(e.dataTransfer.files); });
+  zone.addEventListener("drop", function (e) { e.preventDefault(); uploadFiles(e.dataTransfer.files, sourceOf(e.dataTransfer)); });
 
   var textForm = document.getElementById("text-form");
   document.addEventListener("paste", function (e) {
@@ -121,7 +141,7 @@
     var cd = e.clipboardData;
     if (cd && cd.files && cd.files.length) { // screenshots, copied images/files
       e.preventDefault();
-      uploadFiles(cd.files);
+      uploadFiles(cd.files, sourceOf(cd));
       return;
     }
     if (e.target === textForm.elements.text) return; // normal text paste

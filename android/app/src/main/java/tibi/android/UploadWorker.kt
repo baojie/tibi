@@ -57,7 +57,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
                     if (o == null) loc = null else off = o
                 }
                 if (loc == null) {
-                    loc = api.create(f.length(), UploadOptions(filename = e.name.ifEmpty { null }, title = e.title, kind = e.kind))
+                    loc = api.create(f.length(), UploadOptions(filename = e.name.ifEmpty { null }, title = e.title, kind = e.kind, sourceUrl = e.sourceUrl))
                     e.location = loc
                     job.save()
                 }

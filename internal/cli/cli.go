@@ -87,6 +87,7 @@ upload flags:
       --md           print Markdown (image embed or link) instead of the URL
       --raw          print the direct/raw URL instead of the page URL
       --keep-meta    keep image metadata (EXIF/GPS is stripped by default)
+      --source-url URL  where it came from (http(s) URL; only you see it)
       --no-copy      do not copy the result to the clipboard
   -e, --expire DUR   expire after DUR (10m, 1h, 7d, 30d, never)
   -p, --private      only visible with a read_private token
@@ -273,6 +274,7 @@ type outFlags struct {
 	encrypt, password    bool
 	md, raw, json, nocpy bool
 	keepMeta             bool
+	sourceURL            string
 }
 
 func (a *App) uploadFlags(name string) (*pflag.FlagSet, *outFlags) {
@@ -286,6 +288,7 @@ func (a *App) uploadFlags(name string) (*pflag.FlagSet, *outFlags) {
 	fs.BoolVar(&o.json, "json", false, "print full API response")
 	fs.BoolVar(&o.nocpy, "no-copy", false, "do not copy to clipboard")
 	fs.BoolVar(&o.keepMeta, "keep-meta", false, "keep image metadata")
+	fs.StringVar(&o.sourceURL, "source-url", "", "where the content came from (http(s) URL; shown only to you)")
 	fs.StringVarP(&o.expire, "expire", "e", "", "expire after, e.g. 10m, 1h, 7d, never")
 	fs.BoolVarP(&o.private, "private", "p", false, "private: visible only with a read_private token")
 	fs.StringVar(&o.slug, "slug", "", "custom short link /s/NAME")
@@ -465,7 +468,7 @@ func (a *App) uploadOptions(o *outFlags) client.UploadOptions {
 		}
 	}
 	return client.UploadOptions{
-		Filename: o.name, Title: o.title, Lang: o.lang, Source: "cli", KeepMeta: o.keepMeta,
+		Filename: o.name, Title: o.title, Lang: o.lang, Source: "cli", SourceURL: o.sourceURL, KeepMeta: o.keepMeta,
 		Expires: o.expire, Private: o.private, Slug: o.slug, Burn: o.burn,
 	}
 }

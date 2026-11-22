@@ -93,6 +93,7 @@
 "recent.empty" = "这里还什么都没有。"
 "recent.select_all" = "全选"
 "recent.view" = "视图"
+"recent.source" = "来源"
 "recent.view_list" = "列表"
 "recent.view_grid" = "缩略图"
 

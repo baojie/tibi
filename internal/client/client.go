@@ -65,6 +65,7 @@ type Item struct {
 	ForkedFrom    string `json:"forked_from,omitempty"`
 	BurnAfterRead bool   `json:"burn_after_read"`
 	Source        string `json:"source,omitempty"`
+	SourceURL     string `json:"source_url,omitempty"`
 	ViewCount     int64  `json:"view_count"`
 	ExpiresAt     *int64 `json:"expires_at"`
 	CreatedAt     int64  `json:"created_at"`
@@ -79,16 +80,17 @@ type Whoami struct {
 
 // UploadOptions are optional upload parameters.
 type UploadOptions struct {
-	Filename string
-	Title    string
-	Source   string
-	Kind     string
-	Lang     string
-	KeepMeta bool
-	Expires  string // e.g. "1h", "7d", "never"; "" = server default
-	Private  bool
-	Slug     string
-	Burn     bool
+	Filename  string
+	Title     string
+	Source    string
+	SourceURL string // where the content came from (http(s) URL)
+	Kind      string
+	Lang      string
+	KeepMeta  bool
+	Expires   string // e.g. "1h", "7d", "never"; "" = server default
+	Private   bool
+	Slug      string
+	Burn      bool
 }
 
 func (c *Client) do(req *http.Request, out any) (json.RawMessage, error) {
@@ -134,7 +136,7 @@ func (o UploadOptions) query() url.Values {
 	q := url.Values{}
 	for k, v := range map[string]string{
 		"filename": o.Filename, "title": o.Title, "source": o.Source, "kind": o.Kind,
-		"lang": o.Lang, "expires": o.Expires, "slug": o.Slug,
+		"lang": o.Lang, "expires": o.Expires, "slug": o.Slug, "source_url": o.SourceURL,
 	} {
 		if v != "" {
 			q.Set(k, v)

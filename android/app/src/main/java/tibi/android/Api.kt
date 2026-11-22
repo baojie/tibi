@@ -26,13 +26,29 @@ data class UploadOptions(
     val title: String? = null,
     val kind: String? = null,
     val source: String = "android",
+    val sourceUrl: String? = null,
 ) {
     fun values(): Map<String, String> = buildMap {
         filename?.let { put("filename", it) }
         title?.let { put("title", it) }
         kind?.let { put("kind", it) }
         put("source", source)
+        sourceUrl?.let { put("source_url", it) }
     }
+}
+
+private val urlRe = Regex("""https?://[^\s<>"]+""", RegexOption.IGNORE_CASE)
+
+/**
+ * The first web address in shared text (browsers put the page's address
+ * there when sharing a page or an image), as the API accepts it for
+ * `source_url`: http(s), at most 2048 bytes. Trailing punctuation is not
+ * part of it.
+ */
+fun webUrl(text: String?): String? {
+    val m = urlRe.find(text ?: return null) ?: return null
+    val u = m.value.trimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}', '\'', '"', '。', '，', '）')
+    return u.takeIf { it.toByteArray().size <= 2048 && it.substringAfter("://").isNotEmpty() }
 }
 
 data class Item(val id: String, val url: String, val kind: String)

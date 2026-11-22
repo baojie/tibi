@@ -255,6 +255,7 @@ func (a *App) info(ctx context.Context, args []string) error {
 		row("burn after read", "yes")
 	}
 	row("source", it.Source)
+	row("source url", it.SourceURL)
 	row("created", time.Unix(it.CreatedAt, 0).Format(time.RFC3339))
 	if it.ExpiresAt != nil {
 		row("expires", time.Unix(*it.ExpiresAt, 0).Format(time.RFC3339)+" ("+until(*it.ExpiresAt)+")")

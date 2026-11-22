@@ -151,12 +151,14 @@ class ShareActivity : Activity() {
 
     private fun sources(i: Intent): List<Source> {
         val uris = streams(i)
+        val text = i.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
         if (uris.isNotEmpty()) {
             val single = if (uris.size == 1) i.type?.takeIf { !it.contains('*') } else null
-            return uris.map { Source.Content(it, single) }
+            // A browser sharing one image puts the page's address in the text.
+            val from = if (uris.size == 1) webUrl(text) else null
+            return uris.map { Source.Content(it, single, from) }
         }
-        val text = i.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
-        if (!text.isNullOrBlank()) return listOf(Source.Text(text, i.getStringExtra(Intent.EXTRA_SUBJECT)))
+        if (!text.isNullOrBlank()) return listOf(Source.Text(text, i.getStringExtra(Intent.EXTRA_SUBJECT), webUrl(text)))
         return emptyList()
     }
 }

@@ -16,6 +16,7 @@ data class Entry(
     var location: String? = null,
     var itemId: String? = null,
     var itemUrl: String? = null,
+    val sourceUrl: String? = null, // where it came from (API source_url)
 )
 
 /**
@@ -35,7 +36,7 @@ class Job(val dir: File, val entries: List<Entry>, var collectionUrl: String? = 
         for (e in entries) arr.put(
             JSONObject().put("file", e.file).put("name", e.name).put("mime", e.mime)
                 .putOpt("kind", e.kind).putOpt("title", e.title).putOpt("location", e.location)
-                .putOpt("item_id", e.itemId).putOpt("item_url", e.itemUrl)
+                .putOpt("item_id", e.itemId).putOpt("item_url", e.itemUrl).putOpt("source_url", e.sourceUrl)
         )
         val tmp = File(dir, "job.json.tmp")
         tmp.writeText(JSONObject().put("entries", arr).putOpt("collection_url", collectionUrl).toString())
@@ -62,6 +63,7 @@ class Job(val dir: File, val entries: List<Entry>, var collectionUrl: String? = 
                     e.optString("kind").ifEmpty { null }, e.optString("title").ifEmpty { null },
                     e.optString("location").ifEmpty { null },
                     e.optString("item_id").ifEmpty { null }, e.optString("item_url").ifEmpty { null },
+                    e.optString("source_url").ifEmpty { null },
                 )
             }
             return Job(dir, entries, j.optString("collection_url").ifEmpty { null })

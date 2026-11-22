@@ -94,6 +94,7 @@
 "recent.empty" = "Nothing here yet."
 "recent.select_all" = "Select all"
 "recent.view" = "View"
+"recent.source" = "Source"
 "recent.view_list" = "List"
 "recent.view_grid" = "Thumbnails"
 

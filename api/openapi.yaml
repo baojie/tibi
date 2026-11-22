@@ -223,6 +223,7 @@ paths:
           description: Delete the item when it is first revealed by a visitor without a `read_private` token.
           schema: { type: string, enum: ["0", "1", "true", "false"] }
         - { name: source, in: query, schema: { type: string }, description: "Client tag, e.g. `cli`, `chrome`, `adseen`." }
+        - { name: source_url, in: query, schema: { type: string, format: uri, maxLength: 2048 }, description: "Where the content came from (an image's address, the page a text was taken from): an http(s) URL. Returned only to the uploading token and `read_private` tokens; never on public pages." }
         - { name: meta, in: query, schema: { type: string }, description: "Client metadata (a JSON object as text)." }
         - name: collection
           in: query
@@ -249,6 +250,7 @@ paths:
                 slug: { type: string }
                 burn_after_read: { type: string }
                 source: { type: string }
+                source_url: { type: string }
                 meta: { type: string }
                 collection: { type: string }
                 collection_title: { type: string }
@@ -529,7 +531,7 @@ paths:
         Send `Tus-Resumable: 1.0.0`, `Upload-Length` (required) and
         `Upload-Metadata` with the upload options as base64 values
         (`filename`, `title`, `expires`, `visibility`, `lang`, `kind`,
-        `keep_meta`, `slug`, `burn_after_read`, `source`, `meta`). The
+        `keep_meta`, `slug`, `burn_after_read`, `source`, `source_url`, `meta`). The
         `Location` header is the upload URL. Limit: `max_resumable_bytes`
         (default 2 GiB). Uploads not finished within 24 hours are discarded.
         Requires scope `upload`. Protocol errors (400, 413) are tus-style
@@ -739,6 +741,7 @@ components:
         forked_from: { type: string, description: ID of the item this one is a new version of. }
         burn_after_read: { type: boolean }
         source: { type: string }
+        source_url: { type: string, format: uri, description: "Where it came from (see the upload option). Only for the token that uploaded it and `read_private` tokens." }
         view_count: { type: integer }
         expires_at: { type: [integer, "null"], description: Unix seconds; null for never. }
         created_at: { type: integer, description: Unix seconds. }

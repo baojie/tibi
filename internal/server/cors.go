@@ -11,7 +11,7 @@ import (
 // safe because the API authenticates with bearer tokens, not cookies).
 
 const (
-	corsAllowHeaders  = "Authorization, Content-Type, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset, Upload-Defer-Length, X-Tibi-Filename, X-Tibi-Title, X-Tibi-Kind, X-Tibi-Lang, X-Tibi-Expires, X-Tibi-Visibility, X-Tibi-Slug, X-Tibi-Burn-After-Read, X-Tibi-Keep-Meta, X-Tibi-Source, X-Tibi-Meta"
+	corsAllowHeaders  = "Authorization, Content-Type, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset, Upload-Defer-Length, X-Tibi-Filename, X-Tibi-Title, X-Tibi-Kind, X-Tibi-Lang, X-Tibi-Expires, X-Tibi-Visibility, X-Tibi-Slug, X-Tibi-Burn-After-Read, X-Tibi-Keep-Meta, X-Tibi-Source, X-Tibi-Source-Url, X-Tibi-Meta"
 	corsExposeHeaders = "Location, Upload-Offset, Upload-Length, Tus-Resumable, Tibi-Item-Id, Tibi-Item-Url"
 	corsAllowMethods  = "GET, POST, PATCH, DELETE, HEAD, OPTIONS"
 )

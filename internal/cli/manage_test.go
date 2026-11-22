@@ -284,3 +284,32 @@ func TestEncryptCommands(t *testing.T) {
 	}
 	_ = e
 }
+
+func TestSourceURLFlag(t *testing.T) {
+	e, env := loggedIn(t)
+	env["TIBI_TOKEN"] = e.Token("laptop", "upload")
+	r := exec(t, env, strings.NewReader("from the web"), false, "up", "-n", "a.txt", "--source-url", "https://example.com/post/1", "-")
+	link := strings.TrimSpace(r.stdout)
+	if r.code != 0 {
+		t.Fatalf("up --source-url: %+v", r)
+	}
+	r = exec(t, env, nil, true, "info", link)
+	if r.code != 0 || !strings.Contains(r.stdout, "https://example.com/post/1") {
+		t.Fatalf("info does not show the source URL: %+v", r)
+	}
+	r = exec(t, env, strings.NewReader("pasted"), false, "paste", "--source-url", "https://example.com/post/2")
+	if r.code != 0 {
+		t.Fatalf("paste --source-url: %+v", r)
+	}
+	if r := exec(t, env, nil, true, "info", strings.TrimSpace(r.stdout)); !strings.Contains(r.stdout, "https://example.com/post/2") {
+		t.Fatalf("paste lost the source URL: %+v", r)
+	}
+	// Not stored for encrypted items (it would be plaintext next to them),
+	// and only http(s) URLs.
+	if r := exec(t, env, strings.NewReader("secret"), false, "paste", "--encrypt", "--source-url", "https://example.com/x"); r.code != 2 {
+		t.Fatalf("--encrypt --source-url: %+v", r)
+	}
+	if r := exec(t, env, strings.NewReader("x"), false, "up", "-n", "x.txt", "--source-url", "file:///etc/passwd", "-"); r.code == 0 {
+		t.Fatalf("file: URL accepted: %+v", r)
+	}
+}

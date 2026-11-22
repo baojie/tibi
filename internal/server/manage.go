@@ -52,7 +52,7 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]ItemJSON, 0, len(items))
 	for _, it := range items {
-		j := s.itemJSON(it)
+		j := s.apiItemJSON(r, it)
 		j.Excerpt = ex[it.ID]
 		out = append(out, j)
 	}
@@ -106,7 +106,7 @@ func (s *Server) apiItem(w http.ResponseWriter, r *http.Request) (*store.Item, b
 
 func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 	if it, ok := s.apiItem(w, r); ok {
-		writeJSON(w, http.StatusOK, s.itemJSON(it))
+		writeJSON(w, http.StatusOK, s.apiItemJSON(r, it))
 	}
 }
 
@@ -196,7 +196,7 @@ func (s *Server) handlePatchItem(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		s.internal(w, "patch", err)
 	default:
-		writeJSON(w, http.StatusOK, s.itemJSON(updated))
+		writeJSON(w, http.StatusOK, s.apiItemJSON(r, updated))
 	}
 }
 
@@ -246,7 +246,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]SearchHitJSON, 0, len(hits))
 	for _, h := range hits {
-		out = append(out, SearchHitJSON{s.itemJSON(h.Item), h.Snippet})
+		out = append(out, SearchHitJSON{s.apiItemJSON(r, h.Item), h.Snippet})
 	}
 	var nc *string
 	if next != "" {

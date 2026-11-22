@@ -55,6 +55,7 @@
  * @property {string} [slug]
  * @property {string} [slug_url]
  * @property {string} [source]
+ * @property {string} [source_url] - Where it came from (see the upload option). Only for the token that uploaded it and `read_private` tokens.
  * @property {string} [thumbnail_url] - Images: 400px-wide WebP thumbnail, made on first request (404 when none can be made, e.g. a decompression bomb).
  * @property {string} [title]
  * @property {string} url - View page.
@@ -98,6 +99,7 @@
  * @property {string} [slug_url]
  * @property {string} [snippet]
  * @property {string} [source]
+ * @property {string} [source_url] - Where it came from (see the upload option). Only for the token that uploaded it and `read_private` tokens.
  * @property {string} [thumbnail_url] - Images: 400px-wide WebP thumbnail, made on first request (404 when none can be made, e.g. a decompression bomb).
  * @property {string} [title]
  * @property {string} url - View page.

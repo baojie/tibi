@@ -56,10 +56,11 @@ add_media() { # local-file device-dir collection-uri
   done
   fail "media scan of $name"
 }
-share() { # mime uri...
+share() { # mime uri...  (SHARE_TEXT: also send it as EXTRA_TEXT, as browsers do)
   local mime=$1; shift
   if [ $# -eq 1 ]; then
-    $ADB shell am start -W -a android.intent.action.SEND -t "$mime" --eu android.intent.extra.STREAM "$1" --grant-read-uri-permission -n $PKG/.ShareActivity >/dev/null
+    $ADB shell am start -W -a android.intent.action.SEND -t "$mime" --eu android.intent.extra.STREAM "$1" \
+      ${SHARE_TEXT:+--es android.intent.extra.TEXT "'$SHARE_TEXT'"} --grant-read-uri-permission -n $PKG/.ShareActivity >/dev/null
   else
     $ADB shell am instrument -w -e uris "$(IFS=,; echo "$*")" -e class $PKG.ShareIntentTest \
       $PKG.test/androidx.test.runner.AndroidJUnitRunner | grep -q "OK (1 test)" || fail "share of $# files"
@@ -120,13 +121,16 @@ ui() {
 }
 sha() { sha256sum | cut -d' ' -f1; }
 
-# 1. One photo → item; link in the clipboard and the notification.
+# 1. One photo → item; link in the clipboard and the notification. Shared
+# the way a browser shares an image (the page's address in the text), so
+# the item records where it came from.
 $MAGICK -size 1200x900 gradient:red-blue "$work/one.jpg"
-share image/jpeg "$(add_media "$work/one.jpg" Pictures content://media/external/images/media)"
+SHARE_TEXT="Sunset photo https://example.com/gallery/42." share image/jpeg "$(add_media "$work/one.jpg" Pictures content://media/external/images/media)"
 u1=$(done_url 1 30)
 id1=${u1##*/}
 it=$(api /api/v1/items/$id1)
 [ "$(jq -r .kind <<<"$it")/$(jq -r .filename <<<"$it")/$(jq -r .source <<<"$it")" = image/one.jpg/android ] || fail "item: $it"
+[ "$(jq -r .source_url <<<"$it")" = https://example.com/gallery/42 ] || fail "source_url: $it"
 [ "$(curl -sf "$(jq -r .raw_url <<<"$it" | local_url)" | sha)" = "$(sha < "$work/one.jpg")" ] || fail "photo bytes differ"
 notified() { for _ in $(seq 10); do $ADB shell dumpsys notification --noredact 2>/dev/null | grep -q "$1" && return; sleep 1; done; return 1; }
 notified "$u1" || fail "no notification with $u1"

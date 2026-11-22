@@ -157,6 +157,7 @@ kept. Identical content is stored once.
 | `slug` | query | string | Short link `/s/{slug}`: 3–64 characters of `a-z`, `0-9` and `-`, not a reserved word. Moves from any item that had it. Single-file uploads only. |
 | `burn_after_read` | query | string | Delete the item when it is first revealed by a visitor without a `read_private` token. |
 | `source` | query | string | Client tag, e.g. `cli`, `chrome`, `adseen`. |
+| `source_url` | query | string (uri) | Where the content came from (an image's address, the page a text was taken from): an http(s) URL. Returned only to the uploading token and `read_private` tokens; never on public pages. |
 | `meta` | query | string | Client metadata (a JSON object as text). |
 | `collection` | query | string | `new` puts all uploaded files into a new collection, in order; a collection ID appends them to it. The response is then a CollectionUpload. Not allowed with `burn_after_read`. |
 | `collection_title` | query | string | Title of the new collection (with `collection=new`). |
@@ -453,7 +454,7 @@ Storage, item counts, traffic and the most-served items. Requires scope `admin`.
 Send `Tus-Resumable: 1.0.0`, `Upload-Length` (required) and
 `Upload-Metadata` with the upload options as base64 values
 (`filename`, `title`, `expires`, `visibility`, `lang`, `kind`,
-`keep_meta`, `slug`, `burn_after_read`, `source`, `meta`). The
+`keep_meta`, `slug`, `burn_after_read`, `source`, `source_url`, `meta`). The
 `Location` header is the upload URL. Limit: `max_resumable_bytes`
 (default 2 GiB). Uploads not finished within 24 hours are discarded.
 Requires scope `upload`. Protocol errors (400, 413) are tus-style
@@ -635,6 +636,7 @@ an `admin` token, or from the same machine on a direct connection
 | `slug` | string |  |  |
 | `slug_url` | string (uri) |  |  |
 | `source` | string |  |  |
+| `source_url` | string (uri) |  | Where it came from (see the upload option). Only for the token that uploaded it and `read_private` tokens. |
 | `thumbnail_url` | string (uri) |  | Images: 400px-wide WebP thumbnail, made on first request (404 when none can be made, e.g. a decompression bomb). |
 | `title` | string |  |  |
 | `width` | integer |  | Images: display width (EXIF rotation applied). |
@@ -687,6 +689,7 @@ An Item plus `snippet`, the line of text containing the first query word.
 | `slug_url` | string (uri) |  |  |
 | `snippet` | string |  |  |
 | `source` | string |  |  |
+| `source_url` | string (uri) |  | Where it came from (see the upload option). Only for the token that uploaded it and `read_private` tokens. |
 | `thumbnail_url` | string (uri) |  | Images: 400px-wide WebP thumbnail, made on first request (404 when none can be made, e.g. a decompression bomb). |
 | `title` | string |  |  |
 | `width` | integer |  | Images: display width (EXIF rotation applied). |

@@ -188,6 +188,11 @@ async function dataURLBlob(u) {
   return (await fetch(u)).blob();
 }
 
+/** An http(s) URL the server accepts as source_url, or "". @param {string} u */
+function webURL(u) {
+  return /^https?:\/\//.test(u) && new TextEncoder().encode(u).length <= 2048 ? u : "";
+}
+
 /**
  * Runs one menu action; exported on self for tests.
  * @param {{menuItemId: string|number, srcUrl?: string, selectionText?: string, pageUrl?: string, frameId?: number}} info
@@ -200,9 +205,12 @@ async function handle(info, tab) {
     chrome.runtime.openOptionsPage();
     return { error: "not configured" };
   }
-  const pageURL = info.pageUrl || (tab && tab.url) || "";
-  const meta = pageURL && /^https?:/.test(pageURL) ? { page_url: pageURL } : undefined;
-  const base = { source: "chrome", meta };
+  const pageURL = webURL(info.pageUrl || (tab && tab.url) || "");
+  const meta = pageURL ? { page_url: pageURL } : undefined;
+  // Where it came from: an image's own address (unless it only exists in
+  // the page, as data: or blob:), else the page.
+  const sourceURL = (info.menuItemId === "image" && webURL(info.srcUrl || "")) || pageURL;
+  const base = { source: "chrome", meta, source_url: sourceURL || undefined };
   try {
     let item;
     if (info.menuItemId === "image") {
