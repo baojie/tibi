@@ -1,4 +1,4 @@
-// Generated from api/openapi.yaml (tibi API 0.1.3) by `go run ./tools/apidoc -js`. Do not edit.
+// Generated from api/openapi.yaml (tibi API 0.1.4) by `go run ./tools/apidoc -js`. Do not edit.
 
 /**
  * @typedef {Object} Collection

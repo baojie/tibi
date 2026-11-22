@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may change
 between minor versions, but the public URL scheme is frozen from 0.0.1.
 
+## [0.1.4] — Thumbnail view of recent items
+
+![Recent items in the thumbnail view: images, notes and code as same-size cards](docs/screenshots/v0.1.4.png)
+
+### Added
+- Web: Recent items has a thumbnail view next to the list: same-size cards
+  showing an image's thumbnail, the start of a text, or the kind. The
+  choice is remembered in the browser.
+
 ## [0.1.3] — Previews in the Chrome extension; hardening for agents
 
 ![a link in a toast on the page, and the extension's popup with preview cards](docs/screenshots/v0.1.3.png)

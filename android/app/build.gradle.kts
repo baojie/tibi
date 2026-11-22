@@ -10,8 +10,8 @@ android {
         applicationId = "tibi.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 103
-        versionName = "0.1.3"
+        versionCode = 104
+        versionName = "0.1.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

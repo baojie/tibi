@@ -4,7 +4,7 @@
 #
 #   scripts/screenshots/run.sh [VERSION...]     # default: all
 #
-# Builds tibi, runs throwaway servers on 127.0.0.1:18100–18103 with demo
+# Builds tibi, runs throwaway servers on 127.0.0.1:18100–18104 with demo
 # data, records real terminal sessions and takes the pictures with headless
 # Chrome. Needs Node ≥ 22, Chrome, ImageMagick, ffmpeg, jq and Docker (an
 # S3 gateway for 0.0.5, the tibi image for 0.0.11). The extension (0.0.15,
@@ -327,6 +327,19 @@ if wanted 0.1.1; then
   scene "$(jq -nc --arg out "$out/v0.1.1.png" --arg url "$base/upload" --arg run "$run" --arg paste "$paste" \
     '{out:$out,url:$url,width:1100,height:760,run:$run,waitAfter:"!document.getElementById(\"uploader\").hidden",
       then:$paste,waitThen:"document.querySelector(\"#results .result-link\")"}')"
+fi
+
+# 0.1.4 — Recent items in the thumbnail view: images, text, code, a video.
+if wanted 0.1.4; then
+  start recent 18104
+  rt=$(token recent 18104 upload,delete,read_private laptop)
+  for f in clip.mp4 config.py c.png poem.txt b.jpg server.go a.jpg notes.txt sunset.jpg; do
+    (cd "$demo" && TIBI_SERVER=http://localhost:18104 TIBI_TOKEN=$rt tibi up "$f" >/dev/null)
+  done
+  run="localStorage.setItem('tibi.token', '$rt'); localStorage.setItem('tibi.recentView', 'grid'); location.reload()"
+  scene "$(jq -nc --arg out "$out/v0.1.4.png" --arg url "http://localhost:18104/recent" --arg run "$run" \
+    '{out:$out,url:$url,width:1100,height:640,run:$run,
+      waitAfter:"document.getElementById(\"items\").className === \"item-grid\" && [...document.querySelectorAll(\"#items img\")].length === 4 && [...document.querySelectorAll(\"#items img\")].every((i) => i.complete && i.naturalWidth > 0)"}')"
 fi
 
 echo "{}]" >> "$scenes"
