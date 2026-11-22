@@ -38,6 +38,7 @@
  * @property {number} created_at - Unix seconds.
  * @property {string} download_url
  * @property {number} [duration_ms] - Video and audio length
+ * @property {string} [excerpt] - Text items, in the item list only: the first 300 characters (none for burn-after-read).
  * @property {number|null} expires_at - Unix seconds; null for never.
  * @property {string} [filename]
  * @property {string} [forked_from] - ID of the item this one is a new version of.
@@ -54,7 +55,7 @@
  * @property {string} [slug]
  * @property {string} [slug_url]
  * @property {string} [source]
- * @property {string} [thumbnail_url] - Images: 400px-wide WebP thumbnail.
+ * @property {string} [thumbnail_url] - Images: 400px-wide WebP thumbnail, made on first request (404 when none can be made, e.g. a decompression bomb).
  * @property {string} [title]
  * @property {string} url - View page.
  * @property {number} view_count
@@ -79,6 +80,7 @@
  * @property {number} created_at - Unix seconds.
  * @property {string} download_url
  * @property {number} [duration_ms] - Video and audio length
+ * @property {string} [excerpt] - Text items, in the item list only: the first 300 characters (none for burn-after-read).
  * @property {number|null} expires_at - Unix seconds; null for never.
  * @property {string} [filename]
  * @property {string} [forked_from] - ID of the item this one is a new version of.
@@ -96,7 +98,7 @@
  * @property {string} [slug_url]
  * @property {string} [snippet]
  * @property {string} [source]
- * @property {string} [thumbnail_url] - Images: 400px-wide WebP thumbnail.
+ * @property {string} [thumbnail_url] - Images: 400px-wide WebP thumbnail, made on first request (404 when none can be made, e.g. a decompression bomb).
  * @property {string} [title]
  * @property {string} url - View page.
  * @property {number} view_count

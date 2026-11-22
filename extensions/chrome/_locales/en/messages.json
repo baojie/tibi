@@ -25,5 +25,6 @@
   "empty": { "message": "Nothing uploaded yet." },
   "uploadedNotCopied": { "message": "Uploaded, but the link could not be copied" },
   "copiedButton": { "message": "Copied" },
-  "close": { "message": "Close" }
+  "close": { "message": "Close" },
+  "loadMore": { "message": "Load more" }
 }

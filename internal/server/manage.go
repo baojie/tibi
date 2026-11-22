@@ -39,9 +39,22 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, "list", err)
 		return
 	}
+	var ids []string
+	for _, it := range items {
+		if it.Kind == store.KindText {
+			ids = append(ids, it.ID)
+		}
+	}
+	ex, err := s.store.Excerpts(r.Context(), ids, excerptChars)
+	if err != nil {
+		s.internal(w, "list", err)
+		return
+	}
 	out := make([]ItemJSON, 0, len(items))
 	for _, it := range items {
-		out = append(out, s.itemJSON(it))
+		j := s.itemJSON(it)
+		j.Excerpt = ex[it.ID]
+		out = append(out, j)
 	}
 	var nc *string
 	if next != "" {
@@ -49,6 +62,9 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out, "next_cursor": nc})
 }
+
+// excerptChars is how much of a text item the list shows (a card's worth).
+const excerptChars = 300
 
 // privateAccess: private items are for tokens with read_private, and for
 // the token that uploaded them. A leaked upload-only token (a phone, a

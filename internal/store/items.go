@@ -293,6 +293,44 @@ func decodeCursor(c string) (int64, int64, error) {
 
 // ListItems returns live items, newest first, and the cursor of the next
 // page ("" when there is none).
+// SetThumb records that the image with this hash now has a thumbnail.
+func (s *Store) SetThumb(ctx context.Context, sha256hex string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE items SET thumb = 1 WHERE sha256 = ? AND thumb = 0`, sha256hex)
+	return err
+}
+
+// Excerpts returns the start of the indexed text of the given text items,
+// at most n characters each. Burn-after-read items are not indexed and so
+// get none.
+func (s *Store) Excerpts(ctx context.Context, ids []string, n int) (map[string]string, error) {
+	out := map[string]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	q := `SELECT i.id, substr(x.body, 1, ?) FROM items i JOIN items_fts x ON x.rowid = i.rowid
+		WHERE i.kind = 'text' AND i.burn_after_read = 0 AND i.id IN (?` + strings.Repeat(",?", len(ids)-1) + `)`
+	args := []any{n}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var body sql.NullString
+		if err := rows.Scan(&id, &body); err != nil {
+			return nil, err
+		}
+		if body.String != "" {
+			out[id] = body.String
+		}
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) ListItems(ctx context.Context, f ListFilter) ([]*Item, string, error) {
 	if f.Limit <= 0 {
 		f.Limit = 20

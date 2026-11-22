@@ -94,9 +94,9 @@ export class Client {
     return (await this.request("GET", this.url("whoami"))).json();
   }
 
-  /** @param {number} [limit] @returns {Promise<ItemPage>} */
-  async recent(limit = 10) {
-    return (await this.request("GET", this.url("listItems", {}, { limit }))).json();
+  /** Newest items first; pass next_cursor to get the page after. @param {number} [limit] @param {string} [cursor] @returns {Promise<ItemPage>} */
+  async recent(limit = 10, cursor) {
+    return (await this.request("GET", this.url("listItems", {}, { limit, cursor }))).json();
   }
 
   /**

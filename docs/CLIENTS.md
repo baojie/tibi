@@ -77,7 +77,8 @@ searches and bulk-deletes your items.
   the page);
 - right-click a page → **Upload screenshot of this page to tibi** (the
   visible area);
-- the toolbar popup lists recent items with Copy buttons.
+- the toolbar popup shows recent items as preview cards (image thumbnail,
+  start of the text) with Copy buttons, loading more as you scroll.
 
 The link is copied and shown in a toast at the bottom right of the page
 (clickable, with a Copy button; it stays while the pointer is on it), and in

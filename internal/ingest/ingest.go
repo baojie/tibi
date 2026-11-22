@@ -73,9 +73,8 @@ type Options struct {
 
 // Prepared is an upload that has been spooled and classified but not stored.
 type Prepared struct {
-	Item  *store.Item
-	file  *os.File
-	thumb []byte // WebP thumbnail to store, if one must be created
+	Item *store.Item
+	file *os.File
 }
 
 // Close removes the spooled temp file.
@@ -343,7 +342,11 @@ func (p *Pipeline) prepareSpooled(ctx context.Context, pr *Prepared, n int64, o 
 	it.SHA256 = hex.EncodeToString(h.Sum(nil))
 	pr.Item = it
 	if it.Kind == store.KindImage {
-		p.prepareThumb(ctx, pr)
+		// Thumbnails are made when first requested (server handleThumb);
+		// an identical image may already have one.
+		if ok, err := p.Blobs.Exists(ctx, blob.ThumbKey(it.SHA256, ThumbWidth)); err == nil && ok {
+			it.Thumb = true
+		}
 	}
 	if it.Kind == store.KindText {
 		body := make([]byte, store.MaxIndexBytes)
@@ -428,27 +431,6 @@ func Backfill(ctx context.Context, st *store.Store, bs blob.Store) (int, error) 
 	return len(items), nil
 }
 
-// prepareThumb renders the thumbnail unless the same image already has one.
-func (p *Pipeline) prepareThumb(ctx context.Context, pr *Prepared) {
-	it := pr.Item
-	if ok, err := p.Blobs.Exists(ctx, blob.ThumbKey(it.SHA256, ThumbWidth)); err == nil && ok {
-		it.Thumb = true
-		return
-	}
-	data, err := os.ReadFile(pr.file.Name())
-	if err != nil {
-		return
-	}
-	thumb, err := MakeThumb(data, it.Mime)
-	if err != nil {
-		if !errors.Is(err, errNoThumb) {
-			p.warn("thumbnail failed", "err", err)
-		}
-		return
-	}
-	pr.thumb = thumb
-}
-
 func (p *Pipeline) warn(msg string, args ...any) {
 	if p.Log != nil {
 		p.Log.Warn(msg, args...)
@@ -472,16 +454,6 @@ func (p *Pipeline) Commit(ctx context.Context, pr *Prepared) error {
 		}
 		if err := p.Blobs.Put(ctx, key, pr.file, it.Size, it.Mime); err != nil {
 			return err
-		}
-	}
-	if pr.thumb != nil {
-		tk := blob.ThumbKey(it.SHA256, ThumbWidth)
-		if ok, _ := p.Blobs.Exists(ctx, tk); ok {
-			it.Thumb = true
-		} else if err := p.Blobs.Put(ctx, tk, bytes.NewReader(pr.thumb), int64(len(pr.thumb)), "image/webp"); err == nil {
-			it.Thumb = true
-		} else {
-			p.warn("storing thumbnail failed", "err", err)
 		}
 	}
 	return p.Store.CreateItem(ctx, it)

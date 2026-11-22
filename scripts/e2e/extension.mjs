@@ -15,6 +15,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { crc32, deflateSync } from "node:zlib";
 
 const [tibi, chromePath = "google-chrome"] = process.argv.slice(2);
 if (!tibi) { console.error("usage: extension.mjs TIBI_BINARY [CHROME]"); process.exit(2); }
@@ -87,11 +88,26 @@ async function startTibi(name, cors) {
 }
 
 // --- a web page on another origin, with an image and text ---
-const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAEUlEQVR42mP8z8DwnxEImAQAG/0C/xTPyMEAAAAASUVORK5CYII=", "base64");
+// A 320×200 PNG (a sky gradient with a sun), so thumbnails can be made.
+const png = (() => {
+  const w = 320, h = 200, raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const o = y * (w * 3 + 1) + 1 + x * 3, sun = (x - 230) ** 2 + (y - 70) ** 2 < 900;
+    raw[o] = sun ? 255 : 40 + y; raw[o + 1] = sun ? 200 : 90 + y / 2; raw[o + 2] = sun ? 60 : 200 - y / 3;
+  }
+  const chunk = (t, d) => {
+    const len = Buffer.alloc(4), crc = Buffer.alloc(4), td = Buffer.concat([Buffer.from(t), d]);
+    len.writeUInt32BE(d.length); crc.writeUInt32BE(crc32(td));
+    return Buffer.concat([len, td, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from("\x89PNG\r\n\x1a\n", "latin1"), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+})();
 const site = createServer((req, res) => {
-  if (req.url === "/cat.png") { res.writeHead(200, { "Content-Type": "image/png" }); return res.end(png); }
+  if (req.url === "/sky.png") { res.writeHead(200, { "Content-Type": "image/png" }); return res.end(png); }
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-  res.end(`<!doctype html><title>Test page</title><body style="background:#2266aa"><h1>Hello</h1><p id="p">first line<br>second line</p><img id="img" src="/cat.png"></body>`);
+  res.end(`<!doctype html><title>Test page</title><body style="background:#2266aa"><h1>Hello</h1><p id="p">first line<br>second line</p><img id="img" src="/sky.png"></body>`);
 });
 await new Promise((r) => site.listen(0, "127.0.0.1", r));
 const siteURL = `http://localhost:${site.address().port}`;
@@ -117,6 +133,12 @@ try {
   await save(good.base, good.token);
   const st = await waitIn(opt.sessionId, `(() => { const s = document.getElementById("status"); return s.className.includes("ok") && s.textContent; })()`, "connected");
   console.log("OK: options →", st);
+
+  // 25 older text items, so the popup has more than one page (step 6).
+  for (let i = 0; i < 25; i++) {
+    const r = await fetch(good.base + "/api/v1/items?filename=note" + i + ".txt", { method: "POST", headers: { Authorization: "Bearer " + good.token }, body: "note " + i + "\nsecond line" });
+    if (r.status !== 201) fail("paste: " + r.status);
+  }
 
   // The service worker, where the menu handler runs.
   const sw = (await send("Target.getTargets")).targetInfos.find((t) => t.type === "service_worker" && t.url.startsWith(origin));
@@ -149,10 +171,10 @@ try {
   const raw = async (u) => Buffer.from(await (await fetch(u)).arrayBuffer());
 
   // 2. Right-click image → upload, link in clipboard.
-  const img = await run({ menuItemId: "image", srcUrl: siteURL + "/cat.png", pageUrl: siteURL + "/" });
+  const img = await run({ menuItemId: "image", srcUrl: siteURL + "/sky.png", pageUrl: siteURL + "/" });
   const im = await item(img.id);
-  if (im.kind !== "image" || im.filename !== "cat.png" || im.source !== "chrome" || !(await raw(im.raw_url)).equals(png)) fail("image item: " + JSON.stringify(im));
-  console.log("OK: image →", img.url, "(copied; kind image, cat.png, source chrome)");
+  if (im.kind !== "image" || im.filename !== "sky.png" || im.source !== "chrome" || !(await raw(im.raw_url)).equals(png)) fail("image item: " + JSON.stringify(im));
+  console.log("OK: image →", img.url, "(copied; kind image, sky.png, source chrome)");
   if (process.env.SHOT_DIR) { // the toast, for a human look
     const { data } = await send("Page.captureScreenshot", { format: "png" }, page.sessionId);
     writeFileSync(join(process.env.SHOT_DIR, "ext-toast.png"), Buffer.from(data, "base64"));
@@ -204,15 +226,33 @@ try {
   if (!ups || Number(ups[1]) < 21 << 20) fail("big upload did not go through tus: " + (ups && ups[1]));
   console.log("OK: 21 MiB upload via tus, SHA-256 matches");
 
-  // 6. Popup lists recent items.
+  // 6. Popup: cards, 20 per page, more on scrolling to the end (the 25
+  // notes made at the start give two pages).
+  const total = (await (await fetch(good.base + "/api/v1/items?limit=100", { headers: { Authorization: "Bearer " + good.token } })).json()).items.length;
   const pop = await openTab(origin + "/popup.html");
-  const n = await waitIn(pop.sessionId, `document.querySelectorAll("#list li").length`, "popup list");
-  const links = await evalIn(pop.sessionId, `[...document.querySelectorAll("#list li a")].map((a) => a.href)`);
+  const cards = `document.querySelectorAll("#list .card").length`;
+  const first = await waitIn(pop.sessionId, `${cards} >= 20 && ${cards}`, "popup list");
+  if (first !== 20) fail("first page has " + first + " cards");
+  await evalIn(pop.sessionId, `document.getElementById("more").scrollIntoView()`);
+  const all = await waitIn(pop.sessionId, `${cards} === ${total} && document.getElementById("more").hidden && ${cards}`, "second page");
+  const links = await evalIn(pop.sessionId, `[...document.querySelectorAll("#list .card a.pv")].map((a) => a.href)`);
   for (const u of [img.url, txt.url, shot.url]) if (!links.includes(u)) fail("popup misses " + u + ": " + links);
-  console.log(`OK: popup lists ${n} recent items`);
+  // A text card shows the start of the text; an image card its thumbnail
+  // (made on request); all cards are the same size.
+  const card = (u) => `[...document.querySelectorAll("#list .card")].find((c) => c.querySelector("a.pv").href === ${JSON.stringify(u)})`;
+  const text = await evalIn(pop.sessionId, `${card(txt.url)}.querySelector("pre.text")?.textContent`);
+  if (text !== "first line\nsecond line") fail("text card shows " + JSON.stringify(text));
+  for (const u of [shot.url, img.url]) {
+    await evalIn(pop.sessionId, `${card(u)}.scrollIntoView()`);
+    await waitIn(pop.sessionId, `(() => { const i = ${card(u)}.querySelector("img"); return i && i.complete && i.naturalWidth > 0; })()`, "thumbnail of " + u);
+  }
+  const sizes = await evalIn(pop.sessionId, `[...new Set([...document.querySelectorAll("#list .card")].map((c) => c.offsetWidth + "x" + c.offsetHeight))]`);
+  if (sizes.length !== 1) fail("cards differ in size: " + sizes);
+  console.log(`OK: popup shows ${all} cards (20 + ${all - 20} on scrolling), text excerpt and thumbnail, all ${sizes[0]}`);
+  await evalIn(pop.sessionId, `scrollTo(0, 0)`);
   if (process.env.SHOT_DIR) { // screenshots for a human look
     for (const [name, t] of [["popup", pop], ["options", opt]]) {
-      await send("Emulation.setDeviceMetricsOverride", { width: name === "popup" ? 364 : 700, height: name === "popup" ? 330 : 420, deviceScaleFactor: 1, mobile: false }, t.sessionId);
+      await send("Emulation.setDeviceMetricsOverride", { width: name === "popup" ? 404 : 700, height: name === "popup" ? 560 : 420, deviceScaleFactor: 1, mobile: false }, t.sessionId);
       const { data } = await send("Page.captureScreenshot", { format: "png" }, t.sessionId);
       writeFileSync(join(process.env.SHOT_DIR, "ext-" + name + ".png"), Buffer.from(data, "base64"));
     }

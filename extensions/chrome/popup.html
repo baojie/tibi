@@ -4,21 +4,30 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="ui.css">
 <style>
-body { width: 340px; padding: 12px; }
-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+body { width: 380px; padding: 12px; box-sizing: border-box; overflow-x: hidden; }
+header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 header nav a { margin-left: 10px; font-size: 13px; }
-ul { list-style: none; padding: 0; margin: 0; }
-li { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
-li img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex: none; }
-li .kind { width: 36px; text-align: center; font-size: 11px; flex: none; }
-li .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-li button { padding: 2px 8px; font-size: 12px; }
+#list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* Every card is the same size, whatever it shows. */
+.card { display: flex; flex-direction: column; height: 168px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg); }
+.card:hover { border-color: var(--accent); }
+.pv { flex: 1; min-height: 0; display: block; position: relative; overflow: hidden; color: inherit; text-decoration: none;
+  background: color-mix(in srgb, var(--line) 45%, var(--bg)); }
+.pv img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pv .text { margin: 0; padding: 8px 9px; font: 12px/1.4 system-ui, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg); background: var(--bg); height: 100%; box-sizing: border-box; }
+.pv .text::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28px; background: linear-gradient(transparent, var(--bg)); }
+.pv .kind { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.foot { display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 8px; border-top: 1px solid var(--line); }
+.foot .t { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.foot button { padding: 1px 7px; font-size: 11px; }
+#more { display: block; margin: 12px auto 0; }
 </style>
 </head>
 <body>
 <header><strong data-i18n="recent"></strong><nav><a id="upload" href="#" data-i18n="openUpload"></a><a id="settings" href="#" data-i18n="settings"></a></nav></header>
 <p id="status" class="status" hidden></p>
-<ul id="list"></ul>
+<div id="list"></div>
+<button id="more" class="secondary" hidden data-i18n="loadMore"></button>
 <script src="popup.js" type="module"></script>
 </body>
 </html>

@@ -44,6 +44,7 @@ type Server struct {
 	signer      *sign.Signer
 	usage       *usage.Tracker
 	tus         *resumable
+	thumbs      thumbMaker
 	chromaCSS   []byte
 	log         *slog.Logger
 	mux         *http.ServeMux

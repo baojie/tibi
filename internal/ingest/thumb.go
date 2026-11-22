@@ -67,16 +67,31 @@ func isProgressiveJPEG(b []byte) bool {
 	return false
 }
 
-// errNoThumb means no thumbnail can be made for this image type.
+// errNoThumb means no thumbnail can be made for this image.
 var errNoThumb = errors.New("no thumbnail for this image")
+
+// ErrNoThumb reports that MakeThumb cannot make a thumbnail for an image
+// (its type has no decoder, or it is too large to decode safely).
+func ErrNoThumb(err error) bool { return errors.Is(err, errNoThumb) }
+
+// MaxThumbSource is the largest image a thumbnail is made from.
+const MaxThumbSource = 100 << 20
+
+// Thumbable reports whether a thumbnail can be made for an image of this
+// type and size (decoding may still refuse it, see maxThumbBytes).
+func Thumbable(mt string, size int64) bool {
+	switch mt {
+	case "image/png", "image/jpeg", "image/gif", "image/webp":
+		return size <= MaxThumbSource
+	}
+	return false // e.g. AVIF: no pure-Go decoder
+}
 
 // MakeThumb renders a WebP thumbnail at most ThumbWidth wide, applying the
 // JPEG EXIF orientation so it displays upright.
 func MakeThumb(data []byte, mt string) ([]byte, error) {
-	switch mt {
-	case "image/png", "image/jpeg", "image/gif", "image/webp":
-	default:
-		return nil, errNoThumb // e.g. AVIF: no pure-Go decoder
+	if !Thumbable(mt, int64(len(data))) {
+		return nil, errNoThumb
 	}
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {

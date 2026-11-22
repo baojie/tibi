@@ -724,7 +724,8 @@ components:
         width: { type: integer, description: "Images: display width (EXIF rotation applied)." }
         height: { type: integer, description: "Images: display height." }
         duration_ms: { type: integer, description: Video and audio length, when the container header has it. }
-        thumbnail_url: { type: string, format: uri, description: "Images: 400px-wide WebP thumbnail." }
+        thumbnail_url: { type: string, format: uri, description: "Images: 400px-wide WebP thumbnail, made on first request (404 when none can be made, e.g. a decompression bomb)." }
+        excerpt: { type: string, description: "Text items, in the item list only: the first 300 characters (none for burn-after-read)." }
         filename: { type: string }
         title: { type: string }
         lang: { type: string, description: "Text: language, e.g. `go`, `python`, `markdown`, `text`." }

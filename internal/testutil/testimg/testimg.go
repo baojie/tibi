@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -29,6 +30,22 @@ func PNG(w, h int) []byte {
 	var buf bytes.Buffer
 	png.Encode(&buf, testImage(w, h))
 	return buf.Bytes()
+}
+
+// PNG16Header returns a PNG that claims w×h pixels at 16 bits per RGBA
+// channel but holds no image data: a decompression bomb's header.
+func PNG16Header(w, h int) []byte {
+	chunk := func(typ string, data []byte) []byte {
+		b := binary.BigEndian.AppendUint32(nil, uint32(len(data)))
+		b = append(append(b, typ...), data...)
+		return binary.BigEndian.AppendUint32(b, crc32.ChecksumIEEE(append([]byte(typ), data...)))
+	}
+	ihdr := binary.BigEndian.AppendUint32(nil, uint32(w))
+	ihdr = binary.BigEndian.AppendUint32(ihdr, uint32(h))
+	ihdr = append(ihdr, 16, 6, 0, 0, 0) // depth 16, RGBA
+	out := []byte("\x89PNG\r\n\x1a\n")
+	out = append(out, chunk("IHDR", ihdr)...)
+	return append(out, chunk("IEND", nil)...)
 }
 
 // JPEGWithEXIF returns a w×h JPEG carrying an EXIF block with the given

@@ -625,6 +625,7 @@ an `admin` token, or from the same machine on a direct connection
 | `collection_id` | string |  |  |
 | `collection_url` | string (uri) |  |  |
 | `duration_ms` | integer |  | Video and audio length |
+| `excerpt` | string |  | Text items, in the item list only: the first 300 characters (none for burn-after-read). |
 | `filename` | string |  |  |
 | `forked_from` | string |  | ID of the item this one is a new version of. |
 | `height` | integer |  | Images: display height. |
@@ -634,7 +635,7 @@ an `admin` token, or from the same machine on a direct connection
 | `slug` | string |  |  |
 | `slug_url` | string (uri) |  |  |
 | `source` | string |  |  |
-| `thumbnail_url` | string (uri) |  | Images: 400px-wide WebP thumbnail. |
+| `thumbnail_url` | string (uri) |  | Images: 400px-wide WebP thumbnail, made on first request (404 when none can be made, e.g. a decompression bomb). |
 | `title` | string |  |  |
 | `width` | integer |  | Images: display width (EXIF rotation applied). |
 
@@ -675,6 +676,7 @@ An Item plus `snippet`, the line of text containing the first query word.
 | `collection_id` | string |  |  |
 | `collection_url` | string (uri) |  |  |
 | `duration_ms` | integer |  | Video and audio length |
+| `excerpt` | string |  | Text items, in the item list only: the first 300 characters (none for burn-after-read). |
 | `filename` | string |  |  |
 | `forked_from` | string |  | ID of the item this one is a new version of. |
 | `height` | integer |  | Images: display height. |
@@ -685,7 +687,7 @@ An Item plus `snippet`, the line of text containing the first query word.
 | `slug_url` | string (uri) |  |  |
 | `snippet` | string |  |  |
 | `source` | string |  |  |
-| `thumbnail_url` | string (uri) |  | Images: 400px-wide WebP thumbnail. |
+| `thumbnail_url` | string (uri) |  | Images: 400px-wide WebP thumbnail, made on first request (404 when none can be made, e.g. a decompression bomb). |
 | `title` | string |  |  |
 | `width` | integer |  | Images: display width (EXIF rotation applied). |
 

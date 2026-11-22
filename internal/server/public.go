@@ -103,11 +103,15 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, itemID s
 }
 
 // handleThumb serves the WebP thumbnail of an image (an extension of the
-// frozen URL scheme; used by collections and link previews).
+// frozen URL scheme; used by collections, link previews and the extension's
+// list). The thumbnail is made on first request and stored with the blobs.
 func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request, itemID string) {
 	it, acc, err := s.lookup(r, itemID)
-	if err == nil && (!it.Thumb || (it.BurnAfterRead && !acc.privileged)) {
+	if err == nil && (it.Kind != store.KindImage || (it.BurnAfterRead && !acc.privileged)) {
 		err = store.ErrNotFound
+	}
+	if err == nil && !it.Thumb {
+		err = s.makeThumb(r.Context(), it)
 	}
 	if err != nil {
 		s.fail(w, err)

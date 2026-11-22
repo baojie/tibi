@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"image"
 	"io"
@@ -99,6 +100,10 @@ func TestThumbnails(t *testing.T) {
 	if img.ThumbnailURL != e.Cfg.BaseURL+"/"+img.ID+"/thumb" {
 		t.Fatalf("thumbnail_url = %q", img.ThumbnailURL)
 	}
+	// Made on first request, not at upload.
+	if e.ThumbCount() != 0 {
+		t.Fatalf("thumbnail made at upload: %d", e.ThumbCount())
+	}
 	resp, b := get(t, img.ThumbnailURL)
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(b))
 	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/webp" || err != nil || format != "webp" || cfg.Width != ingest.ThumbWidth || cfg.Height != 200 {
@@ -106,6 +111,12 @@ func TestThumbnails(t *testing.T) {
 	}
 	if e.ThumbCount() != 1 {
 		t.Fatalf("thumbs = %d", e.ThumbCount())
+	}
+	if it, err := e.Instance.Store.GetItem(context.Background(), img.ID); err != nil || !it.Thumb {
+		t.Fatalf("item not marked as having a thumbnail: %v", err)
+	}
+	if resp2, b2 := get(t, img.ThumbnailURL); resp2.StatusCode != 200 || !bytes.Equal(b, b2) || e.ThumbCount() != 1 {
+		t.Fatal("second request differs or made another thumbnail")
 	}
 	// A second upload of the same image reuses the thumbnail.
 	dup := upMedia(t, e, tok, "", testimg.PNG(1600, 800))
@@ -135,6 +146,13 @@ func TestThumbnails(t *testing.T) {
 	e.GC()
 	if e.ThumbCount() != before-1 {
 		t.Fatalf("thumbnail not GC'd: %d → %d", before, e.ThumbCount())
+	}
+	// An image no thumbnail can be made for (claims 10000×10000 at 16 bits
+	// per channel): 404, and nothing stored.
+	bomb := upMedia(t, e, tok, "", testimg.PNG16Header(10000, 10000))
+	n := e.ThumbCount()
+	if bomb.ThumbnailURL == "" || status(t, bomb.ThumbnailURL, "") != 404 || status(t, bomb.ThumbnailURL, "") != 404 || e.ThumbCount() != n {
+		t.Fatal("decompression bomb got a thumbnail")
 	}
 	// Burn items keep their thumbnail private too.
 	burn := upMedia(t, e, tok, "?burn_after_read=1", testimg.PNG(10, 10))
@@ -228,5 +246,32 @@ func TestHEICRealConverter(t *testing.T) {
 	_, b := get(t, it.RawURL)
 	if cfg, format, err := image.DecodeConfig(bytes.NewReader(b)); err != nil || format != "jpeg" || cfg.Width != 120 {
 		t.Fatalf("converted file: %v %s", err, format)
+	}
+}
+
+func TestListExcerpt(t *testing.T) {
+	e := testutil.New(t, nil)
+	tok := e.Token("t", "upload")
+	long := strings.Repeat("长文本", 200) // 600 characters
+	txt := upMedia(t, e, tok, "", []byte(long))
+	short := upMedia(t, e, tok, "", []byte("hello\nworld"))
+	burn := upMedia(t, e, tok, "?burn_after_read=1", []byte("secret words"))
+	img := upMedia(t, e, tok, "", testimg.PNG(10, 10))
+	code, b := api(t, e, tok, "GET", "/api/v1/items?limit=10", nil)
+	var page struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Excerpt string `json:"excerpt"`
+		} `json:"items"`
+	}
+	if code != 200 || json.Unmarshal(b, &page) != nil {
+		t.Fatalf("list: %d %s", code, b)
+	}
+	got := map[string]string{}
+	for _, it := range page.Items {
+		got[it.ID] = it.Excerpt
+	}
+	if got[txt.ID] != string([]rune(long)[:300]) || got[short.ID] != "hello\nworld" || got[burn.ID] != "" || got[img.ID] != "" {
+		t.Fatalf("excerpts: %q", got)
 	}
 }
